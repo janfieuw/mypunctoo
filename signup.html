@@ -1,281 +1,1213 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Create account – MyPunctoo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyPunctoo | Sign up</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- JetBrains Mono (zelfde fontfamilie als portal) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- JetBrains Mono -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 
-  <!-- Zelfde stylesheet als index.html -->
-  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      --primary-bg: #041529;
+      --accent: #FDC500;
+      --accent-dark: #d4a700;
+      --card-bg: #ffffff;
+      --text-main: #0b1220;
+      --muted-text: #6b7280;
+      --border-subtle: #e5e7eb;
+      --step-active: #1e3a8a;
+      --step-inactive: #cbd5f5;
+      --danger: #b91c1c;
+      --input-border: #cbd5e1;
+      --input-border-focus: #1d4ed8;
+      --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.45);
+      --radius-xl: 1.5rem;
+      --radius-lg: 0.9rem;
+      --radius-pill: 999px;
+      --transition-fast: 150ms ease-out;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: radial-gradient(circle at top left, #0f172a, #020617);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page-wrapper {
+      width: 100%;
+      max-width: 960px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2.5fr);
+      min-height: 460px;
+    }
+
+    @media (max-width: 860px) {
+      .card {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card-main {
+      padding: 2.2rem 2.6rem;
+      font-family: "JetBrains Mono", monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 1.8rem;
+    }
+
+    @media (max-width: 600px) {
+      .card-main {
+        padding: 1.8rem 1.4rem;
+      }
+    }
+
+    .card-aside {
+      background: radial-gradient(circle at top right, #1d4ed8, #020617);
+      color: #e5e7eb;
+      padding: 2.4rem 2.2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 2rem;
+    }
+
+    @media (max-width: 860px) {
+      .card-aside {
+        order: -1;
+        border-bottom-left-radius: var(--radius-xl);
+        border-bottom-right-radius: var(--radius-xl);
+      }
+    }
+
+    /* Brand & header */
+
+    .brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .brand-mark {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.9rem;
+      border: 2px solid #0b1120;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      background: linear-gradient(135deg, #0f172a, #1d4ed8);
+      color: #f9fafb;
+    }
+
+    .brand-text-main {
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 0.9rem;
+    }
+
+    .brand-text-sub {
+      font-size: 0.7rem;
+      color: var(--muted-text);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .auth-switch {
+      font-size: 0.8rem;
+      color: var(--muted-text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .auth-switch a {
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.3rem 0.7rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid transparent;
+      transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .auth-switch a:hover {
+      background: var(--accent);
+      border-color: #111827;
+      color: #111827;
+    }
+
+    .hero-title {
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .hero-subtitle {
+      font-size: 0.9rem;
+      color: var(--muted-text);
+      max-width: 26rem;
+      line-height: 1.5;
+    }
+
+    /* Step indicator */
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .step-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.25rem 0.9rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      border: 1px solid var(--step-inactive);
+      color: #0f172a;
+      background: #f9fafb;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    .step-pill span {
+      font-weight: 600;
+    }
+
+    .step-pill.active {
+      border-color: var(--step-active);
+      background: #dbeafe;
+      color: #1e3a8a;
+    }
+
+    .step-divider {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, #d1d5db, transparent);
+    }
+
+    /* Error & status */
+
+    .form-error {
+      display: none;
+      padding: 0.8rem 1rem;
+      border-radius: var(--radius-lg);
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: var(--danger);
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    .form-error.visible {
+      display: block;
+    }
+
+    .form-status {
+      display: none;
+      padding: 0.8rem 1rem;
+      border-radius: var(--radius-lg);
+      background: #ecfdf3;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      margin-top: 0.5rem;
+    }
+
+    .form-status.visible {
+      display: block;
+    }
+
+    /* Form layout */
+
+    form {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+    }
+
+    .form-step {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-step.active {
+      display: flex;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    @media (max-width: 640px) {
+      .field-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+      font-size: 0.8rem;
+    }
+
+    .field label {
+      font-weight: 500;
+      color: #111827;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .field small {
+      font-size: 0.68rem;
+      color: var(--muted-text);
+      font-weight: 400;
+    }
+
+    .required-dot {
+      color: var(--danger);
+      font-size: 0.8rem;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"] {
+      width: 100%;
+      padding: 0.55rem 0.8rem;
+      border-radius: 0.65rem;
+      border: 1px solid var(--input-border);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+      background: #f9fafb;
+    }
+
+    input:focus {
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+      background: #ffffff;
+    }
+
+    input::placeholder {
+      color: #9ca3af;
+      font-size: 0.75rem;
+    }
+
+    .field-note {
+      font-size: 0.7rem;
+      color: var(--muted-text);
+    }
+
+    /* Checkbox */
+
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      font-size: 0.75rem;
+      color: var(--muted-text);
+      margin-top: 0.2rem;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      margin-top: 0.12rem;
+      width: 0.9rem;
+      height: 0.9rem;
+      border-radius: 0.25rem;
+    }
+
+    .checkbox-row a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    .checkbox-row a:hover {
+      text-decoration: underline;
+    }
+
+    /* Buttons */
+
+    .form-navigation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.8rem;
+      margin-top: 0.2rem;
+    }
+
+    .nav-left,
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    button {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      border-radius: var(--radius-pill);
+      padding: 0.55rem 1.4rem;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition:
+        background var(--transition-fast),
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        transform var(--transition-fast);
+    }
+
+    .btn-primary {
+      border-color: #111827;
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus-visible {
+      background: var(--accent);
+      color: #111827;
+      border-color: #111827;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      border-color: #d1d5db;
+      background: #f9fafb;
+      color: #111827;
+    }
+
+    .btn-secondary:hover,
+    .btn-secondary:focus-visible {
+      background: var(--accent);
+      border-color: #111827;
+      color: #111827;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary.active,
+    .btn-secondary.active {
+      background: var(--accent);
+      border-color: #111827;
+      color: #111827;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .nav-hint {
+      font-size: 0.7rem;
+      color: var(--muted-text);
+    }
+
+    /* Aside content */
+
+    .aside-tag {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      border-radius: var(--radius-pill);
+      padding: 0.15rem 0.75rem;
+      border: 1px solid rgba(191, 219, 254, 0.6);
+      background: rgba(15, 23, 42, 0.6);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .aside-tag-dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.12);
+    }
+
+    .aside-title {
+      margin-top: 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .aside-list {
+      margin: 1rem 0 0;
+      padding-left: 1.2rem;
+      font-size: 0.8rem;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .aside-list li::marker {
+      color: var(--accent);
+    }
+
+    .aside-footer {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .aside-footer strong {
+      color: #e5e7eb;
+    }
+
+    .pill-status {
+      align-self: flex-start;
+      padding: 0.25rem 0.7rem;
+      border-radius: var(--radius-pill);
+      border: 1px dashed rgba(191, 219, 254, 0.7);
+      font-size: 0.7rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .pill-status-dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 999px;
+      background: #22c55e;
+    }
+  </style>
 </head>
-<body class="auth-body">
-  <main class="auth-main">
-    <section class="auth-shell">
-      <!-- Linkerzijde: pitch -->
-      <div class="auth-left">
-        <img src="assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="auth-logo">
-
-        <h1 class="auth-title">
-          Create your<br><span class="auth-title-accent">MyPunctoo</span> account
-        </h1>
-        <p class="auth-lead">
-          Start with digital time tracking that is simple, affordable and ready for the 2027 regulation.
-        </p>
-
-        <ul class="auth-benefits">
-          <li>Unlimited employees – one fixed monthly price.</li>
-          <li>Physical IN/OUT QR plate linked to your workplace.</li>
-          <li>Online audit log and export to CSV or PDF.</li>
-        </ul>
-
-        <p class="auth-note">
+<body>
+<div class="page-wrapper">
+  <div class="card">
+    <!-- MAIN: SIGNUP FORM -->
+    <div class="card-main">
+      <div class="brand-row">
+        <div class="brand">
+          <div class="brand-mark">MP</div>
+          <div>
+            <div class="brand-text-main">MyPunctoo</div>
+            <div class="brand-text-sub">Digital time tracking</div>
+          </div>
+        </div>
+        <div class="auth-switch">
           Already have an account?
-          <!-- later kan dit naar een echte loginpagina -->
-          <a href="index.html" class="auth-link">Go to portal</a>
-        </p>
+          <a href="/login">Sign in</a>
+        </div>
       </div>
 
-      <!-- Rechterzijde: formulier -->
-      <div class="auth-right">
-        <section class="auth-card" aria-labelledby="create-account-title">
-          <h2 class="auth-card-title" id="create-account-title">Company details</h2>
-          <p class="auth-card-text">
-            We use this information for your client record and invoices. You cannot change it yourself later;
-            updates go via MyPunctoo support.
-          </p>
+      <div>
+        <h1 class="hero-title">Create your MyPunctoo workspace</h1>
+        <p class="hero-subtitle">
+          Two short steps to connect your company to a compliant digital time tracking system.
+        </p>
 
-          <form id="signup-form" class="auth-form" novalidate>
-            <!-- Company -->
-            <div class="auth-field">
-              <label for="company-name" class="auth-label">Company name</label>
-              <input type="text" id="company-name" class="auth-input" required>
-            </div>
+        <div class="step-indicator">
+          <div class="step-pill step-pill-1 active">
+            <span>1</span> Contact person
+          </div>
+          <div class="step-divider"></div>
+          <div class="step-pill step-pill-2">
+            <span>2</span> Company details
+          </div>
+        </div>
+      </div>
 
-            <div class="auth-grid">
-              <div class="auth-field">
-                <label for="vat-number" class="auth-label">VAT number</label>
-                <input
-                  type="text"
-                  id="vat-number"
-                  class="auth-input"
-                  placeholder="e.g. BE 0123.456.789"
-                  required
-                >
-              </div>
-              <div class="auth-field">
-                <label for="employees" class="auth-label">Number of employees / users</label>
-                <input
-                  type="number"
-                  id="employees"
-                  class="auth-input"
-                  min="1"
-                  placeholder="e.g. 10"
-                  required
-                >
-              </div>
-            </div>
+      <!-- Custom error + status banners -->
+      <div id="formError" class="form-error"></div>
+      <div id="formStatus" class="form-status"></div>
 
-            <!-- Address -->
-            <h3 class="auth-section-title">Address</h3>
+      <form id="signupForm" method="POST" action="#" novalidate>
+        <!-- token uit stap 1 -->
+        <input type="hidden" id="signupToken" name="signup_token" value="">
 
-            <div class="auth-field">
-              <label for="street" class="auth-label">Street and number</label>
-              <input type="text" id="street" class="auth-input" placeholder="e.g. Main Street 12" required>
-            </div>
-
-            <div class="auth-grid">
-              <div class="auth-field">
-                <label for="postal-code" class="auth-label">Postal code</label>
-                <input type="text" id="postal-code" class="auth-input" required>
-              </div>
-              <div class="auth-field">
-                <label for="city" class="auth-label">City</label>
-                <input type="text" id="city" class="auth-input" required>
-              </div>
-            </div>
-
-            <div class="auth-field">
-              <label for="country" class="auth-label">Country</label>
-              <input type="text" id="country" class="auth-input" value="Belgium">
-            </div>
-
-            <!-- Contact person -->
-            <h3 class="auth-section-title">Contact person</h3>
-
-            <div class="auth-grid">
-              <div class="auth-field">
-                <label for="contact-first-name" class="auth-label">First name</label>
-                <input type="text" id="contact-first-name" class="auth-input" required>
-              </div>
-              <div class="auth-field">
-                <label for="contact-last-name" class="auth-label">Last name</label>
-                <input type="text" id="contact-last-name" class="auth-input" required>
-              </div>
-            </div>
-
-            <div class="auth-grid">
-              <div class="auth-field">
-                <label for="contact-email" class="auth-label">Contact e-mail</label>
-                <input type="email" id="contact-email" class="auth-input" required>
-              </div>
-              <div class="auth-field">
-                <label for="contact-phone" class="auth-label">Contact phone</label>
-                <input type="tel" id="contact-phone" class="auth-input" placeholder="+32 …">
-              </div>
-            </div>
-
-            <!-- Portal login -->
-            <h3 class="auth-section-title">Login for this portal</h3>
-
-            <div class="auth-field">
-              <label for="admin-email" class="auth-label">
-                Admin login e-mail
-                <span class="auth-label-hint">(can be the same as contact)</span>
-              </label>
-              <input type="email" id="admin-email" class="auth-input" required>
-            </div>
-
-            <div class="auth-grid">
-              <div class="auth-field">
-                <label for="password" class="auth-label">Password</label>
-                <input type="password" id="password" class="auth-input" required minlength="8">
-              </div>
-              <div class="auth-field">
-                <label for="password-confirm" class="auth-label">Repeat password</label>
-                <input type="password" id="password-confirm" class="auth-input" required minlength="8">
-              </div>
-            </div>
-
-            <!-- Billing -->
-            <h3 class="auth-section-title">Billing</h3>
-
-            <div class="auth-field">
-              <label for="billing-email" class="auth-label">
-                Invoice e-mail address
-                <span class="auth-label-hint">(can be accounting or admin)</span>
-              </label>
-              <input type="email" id="billing-email" class="auth-input" required>
-            </div>
-
-            <div class="auth-field">
-              <label for="billing-reference" class="auth-label">
-                Billing reference / PO
-                <span class="auth-label-optional">optional</span>
+        <!-- STEP 1: CONTACT PERSON + PASSWORD -->
+        <div id="step-1" class="form-step active">
+          <div class="field-row">
+            <div class="field">
+              <label for="firstName">
+                First name
+                <span class="required-dot">*</span>
               </label>
               <input
+                id="firstName"
+                name="first_name"
                 type="text"
-                id="billing-reference"
-                class="auth-input"
-                placeholder="Cost center, PO number…"
+                autocomplete="given-name"
+                placeholder="e.g. Anna"
+                required
               >
             </div>
 
-            <!-- Terms -->
-            <label class="auth-checkbox-row">
-              <input type="checkbox" id="accept-terms" class="auth-checkbox" required>
-              <span class="auth-checkbox-label">
-                I agree with the MyPunctoo terms and privacy policy.
-              </span>
+            <div class="field">
+              <label for="lastName">
+                Last name
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="lastName"
+                name="last_name"
+                type="text"
+                autocomplete="family-name"
+                placeholder="e.g. Vermeer"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="email">
+              Work e-mail
+              <span class="required-dot">*</span>
             </label>
-
-            <p class="auth-small-note">
-              By creating an account you start with the standard KMO subscription:
-              unlimited users, monthly billing, cancel any time.
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="name@company.com"
+              required
+            >
+            <p class="field-note">
+              This e-mail will be used as your administrator login.
             </p>
+          </div>
 
-            <button type="submit" class="auth-submit-btn">
-              Create account and go to portal
+          <div class="field-row">
+            <div class="field">
+              <label for="password">
+                Password
+                <span class="required-dot">*</span>
+                <small>min. 8 characters</small>
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Create a strong password"
+                minlength="8"
+                required
+              >
+            </div>
+
+            <div class="field">
+              <label for="passwordConfirm">
+                Confirm password
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="passwordConfirm"
+                name="password_confirm"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Repeat your password"
+                minlength="8"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="checkbox-row">
+            <input
+              id="terms"
+              name="terms"
+              type="checkbox"
+              value="accepted"
+              required
+            >
+            <label for="terms">
+              I agree with the <a href="/terms" target="_blank">Terms &amp; Conditions</a> and
+              confirm that I am allowed to create an account for this company.
+            </label>
+          </div>
+        </div>
+
+        <!-- STEP 2: COMPANY DETAILS -->
+        <div id="step-2" class="form-step">
+          <div class="field">
+            <label for="companyName">
+              Company name
+              <span class="required-dot">*</span>
+            </label>
+            <input
+              id="companyName"
+              name="company_name"
+              type="text"
+              placeholder="Registered legal name"
+              required
+            >
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="vatNumber">
+                VAT / Company number
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="vatNumber"
+                name="vat_number"
+                type="text"
+                placeholder="e.g. BE0123.456.789"
+                required
+              >
+            </div>
+            <div class="field">
+              <label for="employeeCount">
+                Number of employees
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="employeeCount"
+                name="employee_count"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g. 12"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="street">
+              Street &amp; number
+              <span class="required-dot">*</span>
+            </label>
+            <input
+              id="street"
+              name="street"
+              type="text"
+              placeholder="Street name 123"
+              required
+            >
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="postalCode">
+                Postal code
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="postalCode"
+                name="postal_code"
+                type="text"
+                placeholder="e.g. 1000"
+                required
+              >
+            </div>
+
+            <div class="field">
+              <label for="city">
+                City
+                <span class="required-dot">*</span>
+              </label>
+              <input
+                id="city"
+                name="city"
+                type="text"
+                placeholder="e.g. Brussels"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="country">
+              Country
+              <span class="required-dot">*</span>
+            </label>
+            <input
+              id="country"
+              name="country"
+              type="text"
+              placeholder="e.g. Belgium"
+              required
+            >
+          </div>
+
+          <div class="field">
+            <label for="billingRef">
+              Billing reference / PO
+              <small>(optional)</small>
+            </label>
+            <input
+              id="billingRef"
+              name="billing_reference"
+              type="text"
+              placeholder="Internal reference for invoicing"
+            >
+            <p class="field-note">
+              Optional: included on your invoices if provided.
+            </p>
+          </div>
+        </div>
+
+        <!-- NAVIGATION -->
+        <div class="form-navigation" id="formNavigation">
+          <div class="nav-left">
+            <button
+              type="button"
+              id="backButton"
+              class="btn-secondary"
+              style="display: none;"
+            >
+              ← Back
             </button>
+            <span class="nav-hint" id="navHint">
+              Step 1 of 2 — contact person
+            </span>
+          </div>
+          <div class="nav-right">
+            <button
+              type="button"
+              id="nextButton"
+              class="btn-primary active"
+            >
+              Next →
+            </button>
+            <button
+              type="button"
+              id="createAccountButton"
+              class="btn-primary"
+              style="display: none;"
+            >
+              Create account
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
 
-            <p class="auth-form-error" id="signup-error" aria-live="polite"></p>
-          </form>
-        </section>
+    <!-- ASIDE -->
+    <div class="card-aside">
+      <div>
+        <div class="aside-tag" id="asideTag">
+          <span class="aside-tag-dot"></span>
+          Step 1: admin + password
+        </div>
+
+        <h2 class="aside-title" id="asideTitle">Ready for the 2027 time tracking rules.</h2>
+
+        <ul class="aside-list" id="asideList">
+          <li>Secure admin account linked to your company.</li>
+          <li>Company profile used for inspections and reports.</li>
+          <li>Connect physical QR badge and digital timesheets.</li>
+          <li>No hardware investment, cloud-based and scalable.</li>
+        </ul>
       </div>
-    </section>
-  </main>
 
-  <script>
-    // Simple front-end validation + mock "client record" storage
-    document.addEventListener("DOMContentLoaded", function () {
-      const form = document.getElementById("signup-form");
-      const errorEl = document.getElementById("signup-error");
+      <div class="aside-footer" id="asideFooter">
+        <div class="pill-status" id="asideStatusPill">
+          <span class="pill-status-dot"></span>
+          Account goes active after company details are saved.
+        </div>
+        <div>
+          <strong>Need help?</strong> Contact us at support@mypunctoo.com
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-      const contactEmailInput = document.getElementById("contact-email");
-      const adminEmailInput = document.getElementById("admin-email");
+<script>
+  (function () {
+    const API_STEP1 = '/api/signup/step1'; // TODO: aanpassen naar jouw backend route
+    const API_STEP2 = '/api/signup/step2'; // TODO: idem
 
-      // gemak: als admin e-mail leeg is, vullen we automatisch de contact e-mail in
-      contactEmailInput.addEventListener("blur", function () {
-        if (!adminEmailInput.value.trim()) {
-          adminEmailInput.value = contactEmailInput.value.trim();
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    const form = document.getElementById('signupForm');
+    const errorBox = document.getElementById('formError');
+    const statusBox = document.getElementById('formStatus');
+    const backButton = document.getElementById('backButton');
+    const nextButton = document.getElementById('nextButton');
+    const createAccountButton = document.getElementById('createAccountButton');
+    const navHint = document.getElementById('navHint');
+    const pill1 = document.querySelector('.step-pill-1');
+    const pill2 = document.querySelector('.step-pill-2');
+    const signupTokenField = document.getElementById('signupToken');
+
+    const asideTag = document.getElementById('asideTag');
+    const asideTitle = document.getElementById('asideTitle');
+    const asideList = document.getElementById('asideList');
+    const asideFooter = document.getElementById('asideFooter');
+
+    const formNavigation = document.getElementById('formNavigation');
+
+    let currentStep = 1;
+    let isSubmitting = false;
+
+    function showError(message) {
+      if (!message) {
+        errorBox.textContent = '';
+        errorBox.classList.remove('visible');
+        return;
+      }
+      errorBox.textContent = message;
+      errorBox.classList.add('visible');
+      errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function showStatus(message) {
+      if (!message) {
+        statusBox.textContent = '';
+        statusBox.classList.remove('visible');
+        return;
+      }
+      statusBox.textContent = message;
+      statusBox.classList.add('visible');
+    }
+
+    function setLoading(button, loading, labelWhileLoading) {
+      if (!button) return;
+      if (loading) {
+        button.dataset.originalLabel = button.textContent;
+        button.textContent = labelWhileLoading || 'Working...';
+        button.disabled = true;
+      } else {
+        if (button.dataset.originalLabel) {
+          button.textContent = button.dataset.originalLabel;
+        }
+        button.disabled = false;
+      }
+    }
+
+    function goToStep(step) {
+      currentStep = step;
+
+      if (step === 1) {
+        step1.classList.add('active');
+        step2.classList.remove('active');
+        backButton.style.display = 'none';
+        nextButton.style.display = 'inline-flex';
+        createAccountButton.style.display = 'none';
+        nextButton.classList.add('active');
+        createAccountButton.classList.remove('active');
+        navHint.textContent = 'Step 1 of 2 — contact person';
+        pill1.classList.add('active');
+        pill2.classList.remove('active');
+
+        asideTag.innerHTML = '<span class="aside-tag-dot"></span> Step 1: admin + password';
+        asideTitle.textContent = 'Ready for the 2027 time tracking rules.';
+        asideList.innerHTML = `
+          <li>Secure admin account linked to your company.</li>
+          <li>Company profile used for inspections and reports.</li>
+          <li>Connect physical QR badge and digital timesheets.</li>
+          <li>No hardware investment, cloud-based and scalable.</li>
+        `;
+      } else {
+        step1.classList.remove('active');
+        step2.classList.add('active');
+        backButton.style.display = 'inline-flex';
+        nextButton.style.display = 'none';
+        createAccountButton.style.display = 'inline-flex';
+        nextButton.classList.remove('active');
+        createAccountButton.classList.add('active');
+        navHint.textContent = 'Step 2 of 2 — company details';
+        pill1.classList.add('active');
+        pill2.classList.add('active');
+
+        asideTag.innerHTML = '<span class="aside-tag-dot"></span> Step 2: company profile';
+        asideTitle.textContent = 'Company information for inspections & reports.';
+        asideList.innerHTML = `
+          <li>Legal information used in official time tracking reports.</li>
+          <li>Inspectors can match your QR badge to this company profile.</li>
+          <li>Employee counts help calculate the correct licence.</li>
+          <li>You can edit these settings later from the admin panel.</li>
+        `;
+      }
+
+      showError('');
+      showStatus('');
+    }
+
+    function validateStep1() {
+      const firstName = document.getElementById('firstName');
+      const lastName = document.getElementById('lastName');
+      const email = document.getElementById('email');
+      const password = document.getElementById('password');
+      const passwordConfirm = document.getElementById('passwordConfirm');
+      const terms = document.getElementById('terms');
+
+      const errors = [];
+
+      if (!firstName.value.trim()) errors.push('Please fill in your first name.');
+      if (!lastName.value.trim()) errors.push('Please fill in your last name.');
+
+      if (!email.value.trim()) {
+        errors.push('Please provide a work e-mail address.');
+      } else if (!email.checkValidity()) {
+        errors.push('Please provide a valid e-mail address.');
+      }
+
+      if (!password.value) {
+        errors.push('Please create a password.');
+      } else if (password.value.length < 8) {
+        errors.push('Password must be at least 8 characters long.');
+      }
+
+      if (!passwordConfirm.value) {
+        errors.push('Please confirm your password.');
+      } else if (password.value && password.value !== passwordConfirm.value) {
+        errors.push('Passwords do not match.');
+      }
+
+      if (!terms.checked) {
+        errors.push('Please accept the Terms & Conditions to continue.');
+      }
+
+      if (errors.length) {
+        showError(errors.join(' '));
+        return false;
+      }
+
+      showError('');
+      return true;
+    }
+
+    function validateStep2() {
+      const requiredFields = [
+        'companyName',
+        'vatNumber',
+        'employeeCount',
+        'street',
+        'postalCode',
+        'city',
+        'country'
+      ];
+
+      const errors = [];
+
+      requiredFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) {
+          el.classList.add('has-error');
+          errors.push('Please fill in all required company fields.');
+        } else {
+          el.classList.remove('has-error');
         }
       });
 
-      form.addEventListener("submit", function (event) {
-        event.preventDefault();
-        errorEl.textContent = "";
+      const employeeCount = document.getElementById('employeeCount');
+      if (employeeCount.value && Number(employeeCount.value) <= 0) {
+        errors.push('Number of employees must be at least 1.');
+      }
 
-        const password = document.getElementById("password").value.trim();
-        const confirm = document.getElementById("password-confirm").value.trim();
-        const accept = document.getElementById("accept-terms").checked;
+      if (errors.length) {
+        showError([...new Set(errors)].join(' ')); // uniek
+        return false;
+      }
 
-        if (password.length < 8) {
-          errorEl.textContent = "Password must contain at least 8 characters.";
-          return;
-        }
+      showError('');
+      return true;
+    }
 
-        if (password !== confirm) {
-          errorEl.textContent = "Passwords do not match.";
-          return;
-        }
+    function collectStep1Payload() {
+      return {
+        first_name: document.getElementById('firstName').value.trim(),
+        last_name: document.getElementById('lastName').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value,
+        password_confirm: document.getElementById('passwordConfirm').value,
+        terms: document.getElementById('terms').checked
+      };
+    }
 
-        if (!accept) {
-          errorEl.textContent = "Please accept the terms to continue.";
-          return;
-        }
+    function collectStep2Payload() {
+      return {
+        signup_token: signupTokenField.value || null,
+        company_name: document.getElementById('companyName').value.trim(),
+        vat_number: document.getElementById('vatNumber').value.trim(),
+        employee_count: document.getElementById('employeeCount').value,
+        street: document.getElementById('street').value.trim(),
+        postal_code: document.getElementById('postalCode').value.trim(),
+        city: document.getElementById('city').value.trim(),
+        country: document.getElementById('country').value.trim(),
+        billing_reference: document.getElementById('billingRef').value.trim() || null
+      };
+    }
 
-        // Gegevens ophalen voor een mock "client record"
-        const now = new Date();
-        const clientRecord = {
-          companyName: document.getElementById("company-name").value.trim(),
-          vatNumber: document.getElementById("vat-number").value.trim(),
-          employees: parseInt(document.getElementById("employees").value.trim() || "0", 10),
-          street: document.getElementById("street").value.trim(),
-          postalCode: document.getElementById("postal-code").value.trim(),
-          city: document.getElementById("city").value.trim(),
-          country: document.getElementById("country").value.trim(),
-
-          contactFirstName: document.getElementById("contact-first-name").value.trim(),
-          contactLastName: document.getElementById("contact-last-name").value.trim(),
-          contactEmail: contactEmailInput.value.trim(),
-          contactPhone: document.getElementById("contact-phone").value.trim(),
-
-          adminEmail: adminEmailInput.value.trim(),
-          billingEmail: document.getElementById("billing-email").value.trim(),
-          billingReference: document.getElementById("billing-reference").value.trim(),
-
-          subscriptionStatus: "active",
-          subscriptionStart: now.toISOString(),
-          createdAt: now.toISOString()
-        };
-
-        try {
-          // Voorlopig gewoon in localStorage als demo
-          window.localStorage.setItem("mypunctoo_client_record", JSON.stringify(clientRecord));
-        } catch (e) {
-          console.warn("Could not save client record:", e);
-        }
-
-        // Later: echte API-call naar backend
-        // Voor nu: redirect naar de portal-basis
-        window.location.href = "index.html";
+    async function callApi(url, payload) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        const message = (data && data.error) || 'Something went wrong while creating your account.';
+        throw new Error(message);
+      }
+
+      // verwacht: { ok: true, ... } / { ok: false, error: '...' }
+      if (data && data.ok === false) {
+        throw new Error(data.error || 'Something went wrong while creating your account.');
+      }
+
+      return data || {};
+    }
+
+    nextButton.addEventListener('click', async function () {
+      if (isSubmitting) return;
+      if (!validateStep1()) return;
+
+      isSubmitting = true;
+      setLoading(nextButton, true, 'Saving...');
+
+      try {
+        const payload = collectStep1Payload();
+        const data = await callApi(API_STEP1, payload);
+
+        // verwacht van backend: { ok: true, signupToken: '...', message?: '...' }
+        if (data.signupToken) {
+          signupTokenField.value = data.signupToken;
+        }
+
+        if (data.message) {
+          showStatus(data.message);
+        } else {
+          showStatus('Step 1 saved. Your admin account has been created. Continue with your company details.');
+        }
+
+        goToStep(2);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        isSubmitting = false;
+        setLoading(nextButton, false);
+      }
     });
-  </script>
+
+    backButton.addEventListener('click', function () {
+      if (isSubmitting) return;
+      goToStep(1);
+    });
+
+    createAccountButton.addEventListener('click', async function () {
+      if (isSubmitting) return;
+
+      const step1Ok = validateStep1(); // safety
+      const step2Ok = validateStep2();
+      if (!step1Ok || !step2Ok) return;
+
+      isSubmitting = true;
+      setLoading(createAccountButton, true, 'Creating account...');
+
+      try {
+        const payload = Object.assign({}, collectStep1Payload(), collectStep2Payload());
+        const data = await callApi(API_STEP2, payload);
+
+        // verwacht van backend:
+        // { ok: true, redirectUrl?: '/login', requiresEmailVerification?: true, message?: '...' }
+        showError('');
+        let msg = data.message;
+
+        if (!msg) {
+          if (data.requiresEmailVerification) {
+            msg = 'Account created. We have sent a verification link to your e-mail. Please confirm to activate your workspace.';
+          } else {
+            msg = 'Your account and company profile have been created successfully.';
+          }
+        }
+
+        showStatus(msg);
+
+        // UI "slot dicht": formulier verbergen, alleen succes tonen
+        form.classList.add('completed');
+        step1.style.display = 'none';
+        step2.style.display = 'none';
+        formNavigation.style.display = 'none';
+
+        asideTag.innerHTML = '<span class="aside-tag-dot"></span> Account created';
+        asideTitle.textContent = 'Check your e-mail to start using MyPunctoo.';
+        asideList.innerHTML = `
+          <li>Open the link in the confirmation e-mail.</li>
+          <li>Log in with the admin e-mail and password you just created.</li>
+          <li>Connect your QR boards and invite your employees.</li>
+          <li>You can update your company profile at any time.</li>
+        `;
+
+        if (data.redirectUrl) {
+          // indien backend een redirect meegeeft
+          window.location.href = data.redirectUrl;
+        }
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        isSubmitting = false;
+        setLoading(createAccountButton, false);
+      }
+    });
+
+    // Form nooit "klassiek" submitten, alles loopt via JS + fetch
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+    });
+  })();
+</script>
 </body>
 </html>
-
