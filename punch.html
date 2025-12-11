@@ -14,40 +14,54 @@
 </head>
 <body class="punch-body">
   <main class="punch-main">
-    <section class="punch-card" id="punch-card">
-      <header class="punch-header">
-        <h1 class="punch-title" id="punch-title">MyPunctoo</h1>
-        <p class="punch-subtitle" id="punch-subtitle">
-          Checking your device and QR code…
-        </p>
-      </header>
+<section class="punch-card" id="punch-card">
+  <!-- Logo + product name -->
+  <div class="punch-brand-row">
+    <img src="assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="punch-logo">
+    <span class="punch-tag">Smart time tracking</span>
+  </div>
 
-      <div class="punch-status" id="punch-status">
-        <!-- Filled by JavaScript -->
-      </div>
+  <!-- Context badge (IN / OUT) -->
+  <div class="punch-mode" id="punch-mode">
+    <!-- wordt via JS aangepast via setTitleAndSubtitle() -->
+    <span class="punch-mode-dot"></span>
+    <span class="punch-mode-label">Clock in</span>
+  </div>
 
-      <!-- First-time link form -->
-      <form class="punch-form" id="punch-form" autocomplete="off" hidden>
-        <label class="punch-label" for="employee-id">
-          Enter your employee ID or e-mail:
-        </label>
-        <input
-          type="text"
-          id="employee-id"
-          class="punch-input"
-          placeholder="e.g. 12345 or piet@example.com"
-          required
-        >
+  <header class="punch-header">
+    <h1 class="punch-title" id="punch-title">Clock in</h1>
+    <p class="punch-subtitle" id="punch-subtitle">
+      You scanned the IN-QR at your workplace.
+    </p>
+  </header>
 
-        <button type="submit" class="punch-button">
-          Link this phone and punch
-        </button>
-      </form>
+  <div class="punch-status" id="punch-status">
+    <!-- Filled by JavaScript -->
+  </div>
 
-      <p class="punch-footnote" id="punch-footnote">
-        This page only works via the QR code provided by your employer.
-      </p>
-    </section>
+  <!-- First-time link form -->
+  <form class="punch-form" id="punch-form" autocomplete="off" hidden>
+    <label class="punch-label" for="employee-id">
+      Enter your employee ID:
+    </label>
+    <input
+      type="text"
+      id="employee-id"
+      class="punch-input"
+      placeholder="e.g. EMP-001"
+      required
+    >
+
+    <button type="submit" class="punch-button">
+      Link this phone and punch
+    </button>
+  </form>
+
+  <p class="punch-footnote" id="punch-footnote">
+    This page only works via the QR code provided by your employer.
+  </p>
+</section>
+
   </main>
 
   <script>
@@ -159,7 +173,8 @@
           This is the first time this phone is used with MyPunctoo.
         </p>
         <p class="punch-text">
-          We link this device once to your employee ID or e-mail. Next time you only need to scan.
+          We link this device once to your <strong>employee ID</strong>.
+          Next time you only need to scan the QR code.
         </p>
       `;
     }
@@ -247,3 +262,4 @@
   </script>
 </body>
 </html>
+
