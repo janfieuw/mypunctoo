@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MyPunctoo – Client Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- JetBrains Mono for white sections -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <img src="assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="logo">
+
+        <nav class="main-nav" aria-label="Main navigation">
+          <button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button>
+          <button class="nav-btn" type="button" data-view="client-record">Client record</button>
+          <button class="nav-btn" type="button" data-view="users">Users</button>
+          <button class="nav-btn" type="button" data-view="raw-data">Raw data</button>
+          <button class="nav-btn" type="button" data-view="reports">Reports</button>
+          <button class="nav-btn" type="button" data-view="invoices">Invoices</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Views are loaded here -->
+      <div id="app"></div>
+    </main>
+  </div>
+
+  <script src="js/app.js" defer></script>
+</body>
+</html>

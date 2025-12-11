@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MyPunctoo – Punch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- JetBrains Mono for the punch card -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="punch-body">
+  <main class="punch-main">
+    <section class="punch-card" id="punch-card">
+      <header class="punch-header">
+        <h1 class="punch-title" id="punch-title">MyPunctoo</h1>
+        <p class="punch-subtitle" id="punch-subtitle">
+          Checking your device and QR code…
+        </p>
+      </header>
+
+      <div class="punch-status" id="punch-status">
+        <!-- Filled by JavaScript -->
+      </div>
+
+      <!-- First-time link form -->
+      <form class="punch-form" id="punch-form" autocomplete="off" hidden>
+        <label class="punch-label" for="employee-id">
+          Enter your employee ID or e-mail:
+        </label>
+        <input
+          type="text"
+          id="employee-id"
+          class="punch-input"
+          placeholder="e.g. 12345 or piet@example.com"
+          required
+        >
+
+        <button type="submit" class="punch-button">
+          Link this phone and punch
+        </button>
+      </form>
+
+      <p class="punch-footnote" id="punch-footnote">
+        This page only works via the QR code provided by your employer.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    // ------------------------------
+    // Config / constants
+    // ------------------------------
+    const DEVICE_USER_KEY = "mypunctoo_device_user";
+    const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
+
+    // ------------------------------
+    // URL parameters: QR token + direction
+    // ------------------------------
+    function getPunchParams() {
+      const params = new URLSearchParams(window.location.search);
+      const qr = params.get("qr") || "demo-qr";
+      const typeParam = (params.get("type") || "in").toLowerCase();
+      const direction = typeParam === "out" ? "out" : "in"; // default: in
+      return { qr, direction };
+    }
+
+    // ------------------------------
+    // Subscription status (shared with portal)
+    // ------------------------------
+    function loadSubscriptionStatus() {
+      try {
+        const raw = window.localStorage.getItem(SUBSCRIPTION_STATUS_KEY);
+        if (!raw) return "active";
+        const parsed = JSON.parse(raw);
+        return parsed === "inactive" ? "inactive" : "active";
+      } catch (e) {
+        console.warn("Could not read subscription status:", e);
+        return "active";
+      }
+    }
+
+    // ------------------------------
+    // Device user storage (simulating a token)
+    // ------------------------------
+    function getStoredDeviceUser() {
+      try {
+        const raw = window.localStorage.getItem(DEVICE_USER_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        console.warn("Could not read device user:", e);
+        return null;
+      }
+    }
+
+    function storeDeviceUser(user) {
+      try {
+        window.localStorage.setItem(DEVICE_USER_KEY, JSON.stringify(user));
+      } catch (e) {
+        console.warn("Could not store device user:", e);
+      }
+    }
+
+    // ------------------------------
+    // UI helpers
+    // ------------------------------
+    function formatTime(date) {
+      return date.toLocaleTimeString("nl-BE", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function setTitleAndSubtitle(direction) {
+      const titleEl = document.getElementById("punch-title");
+      const subtitleEl = document.getElementById("punch-subtitle");
+
+      if (direction === "in") {
+        titleEl.textContent = "Clock in";
+        subtitleEl.textContent = "You scanned the IN-QR at your workplace.";
+      } else {
+        titleEl.textContent = "Clock out";
+        subtitleEl.textContent = "You scanned the OUT-QR at your workplace.";
+      }
+    }
+
+    function showSubscriptionInactive() {
+      const statusEl = document.getElementById("punch-status");
+      const formEl = document.getElementById("punch-form");
+      const titleEl = document.getElementById("punch-title");
+      const subtitleEl = document.getElementById("punch-subtitle");
+
+      titleEl.textContent = "Subscription inactive";
+      subtitleEl.textContent = "Clocking is currently disabled for this company.";
+
+      formEl.hidden = true;
+      statusEl.innerHTML = `
+        <p class="punch-emoji">⛔</p>
+        <p class="punch-text punch-text-main">
+          Your employer's MyPunctoo subscription is <strong>inactive</strong>.
+          Clocking is temporarily disabled.
+        </p>
+        <p class="punch-text">
+          Please contact your manager or HR department if you think this is a mistake.
+        </p>
+      `;
+    }
+
+    function showFirstTimeForm() {
+      const form = document.getElementById("punch-form");
+      const status = document.getElementById("punch-status");
+
+      form.hidden = false;
+      status.innerHTML = `
+        <p class="punch-text">
+          This is the first time this phone is used with MyPunctoo.
+        </p>
+        <p class="punch-text">
+          We link this device once to your employee ID or e-mail. Next time you only need to scan.
+        </p>
+      `;
+    }
+
+    function showPunchResult(user, direction, qrToken) {
+      const status = document.getElementById("punch-status");
+      const now = new Date();
+      const time = formatTime(now);
+
+      const actionText = direction === "in" ? "clocked in" : "clocked out";
+      const emoji = direction === "in" ? "🟢" : "🔵";
+
+      status.innerHTML = `
+        <p class="punch-emoji">${emoji}</p>
+        <p class="punch-text punch-text-main">
+          ${user.displayName}, you are <strong>${actionText}</strong> at <strong>${time}</strong>.
+        </p>
+        <p class="punch-text">
+          (demo) QR reference: <code>${qrToken}</code>
+        </p>
+      `;
+    }
+
+    // ------------------------------
+    // Simulate server punch (for now only front-end)
+    // ------------------------------
+    function simulateServerPunch(user, direction, qrToken) {
+      console.log("PUNCH_EVENT", {
+        userId: user.id,
+        displayName: user.displayName,
+        direction,
+        qrToken,
+        timestamp: new Date().toISOString()
+      });
+
+      showPunchResult(user, direction, qrToken);
+    }
+
+    // ------------------------------
+    // Init
+    // ------------------------------
+    (function initPunchPage() {
+      const { qr, direction } = getPunchParams();
+      const subscriptionStatus = loadSubscriptionStatus();
+      const form = document.getElementById("punch-form");
+      const footnote = document.getElementById("punch-footnote");
+
+      setTitleAndSubtitle(direction);
+
+      // If subscription is inactive: no punch allowed
+      if (subscriptionStatus === "inactive") {
+        showSubscriptionInactive();
+        footnote.textContent = "Subscription is inactive. Clocking is currently disabled for this company.";
+        return;
+      }
+
+      const storedUser = getStoredDeviceUser();
+
+      if (storedUser) {
+        // Device already linked → direct punch
+        simulateServerPunch(storedUser, direction, qr);
+        form.hidden = true;
+      } else {
+        // First time on this device
+        showFirstTimeForm();
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        const input = document.getElementById("employee-id");
+        const value = input.value.trim();
+        if (!value) return;
+
+        const newUser = {
+          id: value,
+          displayName: value
+        };
+
+        storeDeviceUser(newUser);
+        simulateServerPunch(newUser, direction, qr);
+        form.hidden = true;
+      });
+    })();
+  </script>
+</body>
+</html>

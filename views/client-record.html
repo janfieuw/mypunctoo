@@ -1,0 +1,162 @@
+<section class="card">
+  <div class="client-header-row">
+    <div>
+      <h1 class="card-title">Client record</h1>
+      <p class="card-text">
+        This is the official client record of your company in <strong>MyPunctoo</strong>.
+        It is used for your <strong>subscription</strong> and <strong>invoices</strong> and
+        cannot be edited directly in the portal.
+      </p>
+    </div>
+
+    <div class="client-status">
+      <span class="client-status-label">Subscription</span>
+      <span class="client-status-badge client-status-badge--active" id="client-status-badge">
+        Active
+      </span>
+      <p class="client-status-meta" id="client-status-meta">
+        Subscription no.: <strong>SUB-000127</strong><br>
+        Start date: <strong>2026-01-01</strong>
+      </p>
+
+      <div class="sub-toggle-wrapper">
+        <span class="sub-toggle-caption">
+          Set subscription inactive<br>
+          <span class="sub-toggle-caption-sub">
+            When inactive, clocking is disabled. Your data remains available.
+          </span>
+        </span>
+        <button
+          type="button"
+          class="sub-toggle-switch sub-toggle-switch--on"
+          id="subscription-toggle"
+          aria-pressed="true"
+        >
+          <span class="sub-toggle-track">
+            <span class="sub-toggle-text sub-toggle-text--on">ON</span>
+            <span class="sub-toggle-text sub-toggle-text--off">OFF</span>
+            <span class="sub-toggle-knob"></span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="client-info-pill">
+    <span class="client-info-pill-label">Read-only</span>
+    <span class="client-info-pill-text">
+      Changes to this record are handled by the Punctoo back office. This keeps your invoicing correct.
+    </span>
+  </div>
+
+  <div class="client-grid">
+    <div class="client-field">
+      <div class="client-field-label">Company name</div>
+      <div class="client-field-value">Demo Company NV</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Company ID</div>
+      <div class="client-field-value">C-000127</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">VAT number</div>
+      <div class="client-field-value">BE 0123.456.789</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Billing plan</div>
+      <div class="client-field-value">
+        Monthly – unlimited users – €19.99 / month (excl. VAT)
+      </div>
+    </div>
+
+    <div class="client-field client-field--full">
+      <div class="client-field-label">Registered address</div>
+      <div class="client-field-value client-field-value--multiline">
+        Industriepark 12<br>
+        9000 Ghent<br>
+        Belgium
+      </div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Main contact</div>
+      <div class="client-field-value">
+        Jan Janssens<br>
+        <span class="client-field-muted">Operations Manager</span>
+      </div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Contact e-mail</div>
+      <div class="client-field-value">hr@democompany.be</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Contact phone</div>
+      <div class="client-field-value">+32 9 123 45 67</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Estimated number of users</div>
+      <div class="client-field-value">40</div>
+    </div>
+
+    <div class="client-field client-field--full">
+      <div class="client-field-label">Billing address</div>
+      <div class="client-field-value client-field-value--multiline">
+        Finance Dept – Demo Company NV<br>
+        PO Box 23<br>
+        9000 Ghent – Belgium
+      </div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Invoices sent to</div>
+      <div class="client-field-value">invoices@democompany.be</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Billing reference / PO</div>
+      <div class="client-field-value">
+        PO-2026-0012
+        <span class="client-field-tag">optional</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="client-footer-row">
+    <p class="client-footnote">
+      This record is the basis for your subscription and all invoices in <strong>Invoices</strong>.
+      Need a change?
+    </p>
+    <a class="client-contact-btn" href="mailto:support@mypunctoo.com">
+      Request change
+    </a>
+  </div>
+
+  <!-- Deactivation modal -->
+  <div class="modal" id="deactivate-modal" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
+      <h2 class="modal-title" id="deactivate-title">Deactivate subscription?</h2>
+      <p class="modal-text">
+        If you deactivate your subscription, <strong>clocking will be disabled immediately</strong>.
+        Your account and historical data remain available in read-only mode.
+      </p>
+      <p class="modal-text">
+        You can re-activate your subscription at any time from this screen.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn modal-btn--secondary" id="cancel-deactivate">
+          Cancel
+        </button>
+        <button type="button" class="modal-btn modal-btn--danger" id="confirm-deactivate">
+          Yes, deactivate
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
