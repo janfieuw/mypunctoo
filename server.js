@@ -15,6 +15,11 @@ app.use(express.json());
 // Statische files (frontend) uit /public
 app.use(express.static(path.join(rootDir, 'public')));
 
+// Loginpagina serveren op /login
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(rootDir, 'public', 'login.html'));
+});
+
 // ===== In-memory "database" (demo) =====
 // In productie vervang je dit door echte DB-tabellen.
 const usersByEmail = new Map();      // email -> user object
@@ -236,7 +241,50 @@ app.post('/api/signup/step2', (req, res) => {
   return res.json({
     ok: true,
     message: 'Your account and company profile have been created successfully.',
-    redirectUrl: '/login' // of '/portal' of wat je wil
+    redirectUrl: '/login' // na signup naar login-pagina
+  });
+});
+
+// ===== API: Login =====
+app.post('/api/login', (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Missing e-mail or password.'
+    });
+  }
+
+  const user = usersByEmail.get(email.toLowerCase());
+  if (!user) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Invalid e-mail or password.'
+    });
+  }
+
+  if (user.status !== 'active') {
+    return res.status(403).json({
+      ok: false,
+      error: 'Your account is not active yet.'
+    });
+  }
+
+  if (user.passwordPlain !== password) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Invalid e-mail or password.'
+    });
+  }
+
+  console.log('LOGIN OK:', user.email);
+
+  // In productie zou je hier een session of JWT aanmaken.
+  // Voor nu: stuur enkel een redirectUrl naar het dashboard.
+  return res.json({
+    ok: true,
+    redirectUrl: '/'
   });
 });
 

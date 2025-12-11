@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MyPunctoo – Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Jouw bestaande stijl -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    body {
+      font-family: "JetBrains Mono", monospace;
+      background: radial-gradient(circle at top left, #0f172a, #020617);
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .login-card {
+      background: #ffffff;
+      border-radius: 1.5rem;
+      box-shadow: 0 1.5rem 3rem rgba(15, 23, 42, 0.55);
+      max-width: 420px;
+      width: 100%;
+      padding: 2rem 2.4rem;
+    }
+
+    .login-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .login-mark {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.9rem;
+      border: 2px solid #0b1120;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      background: linear-gradient(135deg, #0f172a, #1d4ed8);
+      color: #f9fafb;
+    }
+
+    .login-title {
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 600;
+    }
+
+    .login-sub {
+      margin: 0.2rem 0 0;
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+
+    .login-error {
+      display: none;
+      margin-bottom: 0.9rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: 0.8rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      font-size: 0.78rem;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+
+    .login-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      margin-bottom: 0.9rem;
+      font-size: 0.8rem;
+    }
+
+    .login-field label {
+      font-weight: 500;
+    }
+
+    .login-field input {
+      width: 100%;
+      padding: 0.55rem 0.8rem;
+      border-radius: 0.65rem;
+      border: 1px solid #cbd5e1;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      background: #f9fafb;
+      outline: none;
+    }
+
+    .login-field input:focus {
+      border-color: #1d4ed8;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+      background: #ffffff;
+    }
+
+    .login-footer {
+      margin-top: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .login-footer a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    .login-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .login-btn {
+      margin-top: 0.6rem;
+      width: 100%;
+      border-radius: 999px;
+      padding: 0.55rem 1.4rem;
+      border: 1px solid #111827;
+      background: #111827;
+      color: #f9fafb;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: background 150ms ease-out, color 150ms ease-out, transform 150ms ease-out;
+    }
+
+    .login-btn:hover,
+    .login-btn:focus-visible {
+      background: #FDC500;
+      color: #111827;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-header">
+    <div class="login-brand">
+      <div class="login-mark">MP</div>
+      <div>
+        <h1 class="login-title">MyPunctoo</h1>
+        <p class="login-sub">Sign in to your client portal.</p>
+      </div>
+    </div>
+    <a href="/signup.html" style="font-size:0.78rem;">New? <strong>Sign up</strong></a>
+  </div>
+
+  <div id="loginError" class="login-error"></div>
+
+  <form id="loginForm" novalidate>
+    <div class="login-field">
+      <label for="email">Work e-mail</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+    </div>
+
+    <div class="login-field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+
+    <button type="submit" class="login-btn" id="loginButton">
+      Sign in
+    </button>
+
+    <div class="login-footer">
+      <span>Forgotten password? (coming soon)</span>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function () {
+    const form = document.getElementById('loginForm');
+    const errorBox = document.getElementById('loginError');
+    const button = document.getElementById('loginButton');
+
+    function showError(msg) {
+      if (!msg) {
+        errorBox.textContent = '';
+        errorBox.classList.remove('visible');
+      } else {
+        errorBox.textContent = msg;
+        errorBox.classList.add('visible');
+      }
+    }
+
+    function setLoading(loading) {
+      if (loading) {
+        button.dataset.originalLabel = button.textContent;
+        button.textContent = 'Signing in...';
+        button.disabled = true;
+      } else {
+        if (button.dataset.originalLabel) {
+          button.textContent = button.dataset.originalLabel;
+        }
+        button.disabled = false;
+      }
+    }
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      showError('');
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        showError('Please fill in both e-mail and password.');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || (data && data.ok === false)) {
+          throw new Error((data && data.error) || 'Login failed.');
+        }
+
+        const redirectUrl = (data && data.redirectUrl) || '/';
+        window.location.href = redirectUrl;
+      } catch (err) {
+        showError(err.message || 'Login failed.');
+      } finally {
+        setLoading(false);
+      }
+    });
+  })();
+</script>
+</body>
+</html>
