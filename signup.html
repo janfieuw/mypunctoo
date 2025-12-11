@@ -5,17 +5,18 @@
   <title>Create account – MyPunctoo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Fonts -->
+  <!-- JetBrains Mono (zelfde fontfamilie als portal) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="css/style.css">
+  <!-- Zelfde stylesheet als index.html -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body class="auth-body">
   <main class="auth-main">
     <section class="auth-shell">
-      <!-- Left side: pitch -->
+      <!-- Linkerzijde: pitch -->
       <div class="auth-left">
         <img src="assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="auth-logo">
 
@@ -34,16 +35,18 @@
 
         <p class="auth-note">
           Already have an account?
+          <!-- later kan dit naar een echte loginpagina -->
           <a href="index.html" class="auth-link">Go to portal</a>
         </p>
       </div>
 
-      <!-- Right side: form -->
+      <!-- Rechterzijde: formulier -->
       <div class="auth-right">
         <section class="auth-card" aria-labelledby="create-account-title">
           <h2 class="auth-card-title" id="create-account-title">Company details</h2>
           <p class="auth-card-text">
-            We use this information for your client record and invoices. You can always update it later via support.
+            We use this information for your client record and invoices. You cannot change it yourself later;
+            updates go via MyPunctoo support.
           </p>
 
           <form id="signup-form" class="auth-form" novalidate>
@@ -56,22 +59,61 @@
             <div class="auth-grid">
               <div class="auth-field">
                 <label for="vat-number" class="auth-label">VAT number</label>
-                <input type="text" id="vat-number" class="auth-input" placeholder="e.g. BE 0123.456.789">
+                <input
+                  type="text"
+                  id="vat-number"
+                  class="auth-input"
+                  placeholder="e.g. BE 0123.456.789"
+                  required
+                >
               </div>
               <div class="auth-field">
-                <label for="estimated-users" class="auth-label">Estimated number of users</label>
-                <input type="number" id="estimated-users" class="auth-input" min="1" placeholder="e.g. 10" required>
+                <label for="employees" class="auth-label">Number of employees / users</label>
+                <input
+                  type="number"
+                  id="employees"
+                  class="auth-input"
+                  min="1"
+                  placeholder="e.g. 10"
+                  required
+                >
               </div>
             </div>
 
-            <!-- Contact person -->
+            <!-- Address -->
+            <h3 class="auth-section-title">Address</h3>
+
+            <div class="auth-field">
+              <label for="street" class="auth-label">Street and number</label>
+              <input type="text" id="street" class="auth-input" placeholder="e.g. Main Street 12" required>
+            </div>
+
             <div class="auth-grid">
               <div class="auth-field">
-                <label for="contact-first-name" class="auth-label">Contact first name</label>
+                <label for="postal-code" class="auth-label">Postal code</label>
+                <input type="text" id="postal-code" class="auth-input" required>
+              </div>
+              <div class="auth-field">
+                <label for="city" class="auth-label">City</label>
+                <input type="text" id="city" class="auth-input" required>
+              </div>
+            </div>
+
+            <div class="auth-field">
+              <label for="country" class="auth-label">Country</label>
+              <input type="text" id="country" class="auth-input" value="Belgium">
+            </div>
+
+            <!-- Contact person -->
+            <h3 class="auth-section-title">Contact person</h3>
+
+            <div class="auth-grid">
+              <div class="auth-field">
+                <label for="contact-first-name" class="auth-label">First name</label>
                 <input type="text" id="contact-first-name" class="auth-input" required>
               </div>
               <div class="auth-field">
-                <label for="contact-last-name" class="auth-label">Contact last name</label>
+                <label for="contact-last-name" class="auth-label">Last name</label>
                 <input type="text" id="contact-last-name" class="auth-input" required>
               </div>
             </div>
@@ -87,11 +129,14 @@
               </div>
             </div>
 
-            <!-- Account login -->
+            <!-- Portal login -->
             <h3 class="auth-section-title">Login for this portal</h3>
 
             <div class="auth-field">
-              <label for="admin-email" class="auth-label">Admin login e-mail</label>
+              <label for="admin-email" class="auth-label">
+                Admin login e-mail
+                <span class="auth-label-hint">(can be the same as contact)</span>
+              </label>
               <input type="email" id="admin-email" class="auth-input" required>
             </div>
 
@@ -111,8 +156,8 @@
 
             <div class="auth-field">
               <label for="billing-email" class="auth-label">
-                Invoices sent to e-mail
-                <span class="auth-label-hint">(can be the same as contact)</span>
+                Invoice e-mail address
+                <span class="auth-label-hint">(can be accounting or admin)</span>
               </label>
               <input type="email" id="billing-email" class="auth-input" required>
             </div>
@@ -122,7 +167,12 @@
                 Billing reference / PO
                 <span class="auth-label-optional">optional</span>
               </label>
-              <input type="text" id="billing-reference" class="auth-input" placeholder="Cost center, PO number…">
+              <input
+                type="text"
+                id="billing-reference"
+                class="auth-input"
+                placeholder="Cost center, PO number…"
+              >
             </div>
 
             <!-- Terms -->
@@ -150,10 +200,20 @@
   </main>
 
   <script>
-    // Simple front-end validation + redirect to portal (demo behaviour)
+    // Simple front-end validation + mock "client record" storage
     document.addEventListener("DOMContentLoaded", function () {
       const form = document.getElementById("signup-form");
       const errorEl = document.getElementById("signup-error");
+
+      const contactEmailInput = document.getElementById("contact-email");
+      const adminEmailInput = document.getElementById("admin-email");
+
+      // gemak: als admin e-mail leeg is, vullen we automatisch de contact e-mail in
+      contactEmailInput.addEventListener("blur", function () {
+        if (!adminEmailInput.value.trim()) {
+          adminEmailInput.value = contactEmailInput.value.trim();
+        }
+      });
 
       form.addEventListener("submit", function (event) {
         event.preventDefault();
@@ -178,8 +238,40 @@
           return;
         }
 
-        // Later: call backend API to create account.
-        // For now we simulate success and go to the portal dashboard.
+        // Gegevens ophalen voor een mock "client record"
+        const now = new Date();
+        const clientRecord = {
+          companyName: document.getElementById("company-name").value.trim(),
+          vatNumber: document.getElementById("vat-number").value.trim(),
+          employees: parseInt(document.getElementById("employees").value.trim() || "0", 10),
+          street: document.getElementById("street").value.trim(),
+          postalCode: document.getElementById("postal-code").value.trim(),
+          city: document.getElementById("city").value.trim(),
+          country: document.getElementById("country").value.trim(),
+
+          contactFirstName: document.getElementById("contact-first-name").value.trim(),
+          contactLastName: document.getElementById("contact-last-name").value.trim(),
+          contactEmail: contactEmailInput.value.trim(),
+          contactPhone: document.getElementById("contact-phone").value.trim(),
+
+          adminEmail: adminEmailInput.value.trim(),
+          billingEmail: document.getElementById("billing-email").value.trim(),
+          billingReference: document.getElementById("billing-reference").value.trim(),
+
+          subscriptionStatus: "active",
+          subscriptionStart: now.toISOString(),
+          createdAt: now.toISOString()
+        };
+
+        try {
+          // Voorlopig gewoon in localStorage als demo
+          window.localStorage.setItem("mypunctoo_client_record", JSON.stringify(clientRecord));
+        } catch (e) {
+          console.warn("Could not save client record:", e);
+        }
+
+        // Later: echte API-call naar backend
+        // Voor nu: redirect naar de portal-basis
         window.location.href = "index.html";
       });
     });
