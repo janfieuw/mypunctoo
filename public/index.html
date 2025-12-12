@@ -10,13 +10,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="css/style.css">
+  <!-- ✅ absolute path -->
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <div class="page">
     <header class="topbar">
       <div class="topbar-inner">
-        <img src="assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="logo">
+        <!-- ✅ absolute path -->
+        <img src="/assets/mypunctoo_logo.png" alt="MyPunctoo logo" class="logo">
 
         <nav class="main-nav" aria-label="Main navigation">
           <button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button>
@@ -26,18 +28,17 @@
           <button class="nav-btn" type="button" data-view="reports">Reports</button>
           <button class="nav-btn" type="button" data-view="invoices">Invoices</button>
 
-          <!-- Logout (geen data-view, anders breekt initTabs) -->
           <button class="nav-btn" type="button" id="logoutBtn">Logout</button>
         </nav>
       </div>
     </header>
 
     <main class="main">
-      <!-- Views are loaded here -->
       <div id="app"></div>
     </main>
   </div>
 
-  <script src="js/app.js" defer></script>
+  <!-- ✅ absolute path -->
+  <script src="/js/app.js" defer></script>
 </body>
 </html>

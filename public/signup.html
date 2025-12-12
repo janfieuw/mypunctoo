@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- New shared auth stylesheet -->
+  <!-- Shared auth stylesheet -->
   <link rel="stylesheet" href="/css/auth.css">
 </head>
 
@@ -51,10 +51,9 @@
         <div id="formStatus" class="form-status"></div>
 
         <form id="signupForm" method="POST" action="#" novalidate>
-          <!-- token uit stap 1 -->
           <input type="hidden" id="signupToken" name="signup_token" value="">
 
-          <!-- STEP 1: CONTACT PERSON + PASSWORD -->
+          <!-- STEP 1 -->
           <div id="step-1" class="form-step active">
             <div class="field-row">
               <div class="field">
@@ -102,7 +101,7 @@
             </div>
           </div>
 
-          <!-- STEP 2: COMPANY DETAILS -->
+          <!-- STEP 2 -->
           <div id="step-2" class="form-step">
             <div class="field">
               <label for="companyName">
@@ -243,7 +242,6 @@
       const asideFooter = document.getElementById('asideFooter');
       const formNavigation = document.getElementById('formNavigation');
 
-      let currentStep = 1;
       let isSubmitting = false;
 
       function showError(message) {
@@ -280,16 +278,12 @@
       }
 
       function goToStep(step) {
-        currentStep = step;
-
         if (step === 1) {
           step1.classList.add('active');
           step2.classList.remove('active');
           backButton.style.display = 'none';
           nextButton.style.display = 'inline-flex';
           createAccountButton.style.display = 'none';
-          nextButton.classList.add('active');
-          createAccountButton.classList.remove('active');
           navHint.textContent = 'Step 1 of 2 — contact person';
           pill1.classList.add('active');
           pill2.classList.remove('active');
@@ -309,8 +303,6 @@
           backButton.style.display = 'inline-flex';
           nextButton.style.display = 'none';
           createAccountButton.style.display = 'inline-flex';
-          nextButton.classList.remove('active');
-          createAccountButton.classList.add('active');
           navHint.textContent = 'Step 2 of 2 — company details';
           pill1.classList.remove('active');
           pill2.classList.add('active');
@@ -363,9 +355,7 @@
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.ok === false) {
-          throw new Error(data.error || 'Request failed.');
-        }
+        if (!res.ok || data.ok === false) throw new Error(data.error || 'Request failed.');
         return data;
       }
 
@@ -382,9 +372,7 @@
           const data = await callApi(API_STEP1, payload);
 
           signupTokenField.value = data.signupToken || '';
-          if (!signupTokenField.value) {
-            throw new Error('No signup token returned by server.');
-          }
+          if (!signupTokenField.value) throw new Error('No signup token returned by server.');
 
           showStatus('Step 1 saved. Continue with company details.');
           goToStep(2);
@@ -417,22 +405,8 @@
           showError('');
           showStatus(data.message || 'Your account and company profile have been created successfully.');
 
-          form.classList.add('completed');
-          step1.style.display = 'none';
-          step2.style.display = 'none';
-          formNavigation.style.display = 'none';
-
-          asideTag.innerHTML = '<span class="aside-tag-dot"></span> Account created';
-          asideTitle.textContent = 'You can now log in.';
-          asideList.innerHTML = `
-            <li>Log in with the admin e-mail and password you just created.</li>
-            <li>Connect your QR boards and invite your employees.</li>
-            <li>You can update your company profile at any time.</li>
-          `;
-
-          if (data.redirectUrl) {
-            window.location.href = data.redirectUrl; // /login
-          }
+          // optional: redirect
+          if (data.redirectUrl) window.location.href = data.redirectUrl;
         } catch (err) {
           showError(err.message);
         } finally {
@@ -441,10 +415,7 @@
         }
       });
 
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-      });
-
+      form.addEventListener('submit', (e) => e.preventDefault());
       goToStep(1);
     })();
   </script>
