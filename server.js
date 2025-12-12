@@ -65,8 +65,39 @@ const signupTokens = new Map();
 const companiesById = new Map();
 const sessionsByToken = new Map();
 
+// Company-scoped employee list (separate from the admin contact account)
+const employeesByCompanyId = new Map();
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function getTokenFromRequest(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+  return token || '';
+}
+
+function requireAuth(req, res, next) {
+  const token = getTokenFromRequest(req);
+  if (!token || !sessionsByToken.has(token)) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
+  const { email } = sessionsByToken.get(token);
+  const user = usersByEmail.get(email);
+  if (!user || user.status !== 'active') {
+    sessionsByToken.delete(token);
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
+  req.auth = { token, user };
+  next();
+}
+
+function safeText(v) {
+  if (v === undefined || v === null) return '';
+  return String(v).trim();
 }
 
 // =========================================================
@@ -159,18 +190,64 @@ app.post('/api/signup/step2', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
   }
 
+  if (!company_name || !vat_number || !employee_count || !street || !postal_code || !city || !country) {
+    return res.status(400).json({ ok: false, error: 'Missing company fields.' });
+  }
+
   const companyId = uuidv4();
+  const companyCode = `C-${companyId.slice(0, 6).toUpperCase()}`;
+  const subscriptionNumber = `SUB-${companyId.slice(0, 6).toUpperCase()}`;
+
   companiesById.set(companyId, {
     id: companyId,
-    name: company_name,
-    vatNumber: vat_number,
-    employeeCount: employee_count,
-    street,
-    postalCode: postal_code,
-    city,
-    country,
-    billingReference: billing_reference || null
+    code: companyCode,
+    name: safeText(company_name),
+    vatNumber: safeText(vat_number),
+    employeeCount: Number(employee_count) || 0,
+    street: safeText(street),
+    postalCode: safeText(postal_code),
+    city: safeText(city),
+    country: safeText(country),
+    billingReference: billing_reference ? safeText(billing_reference) : null,
+
+    // Portal-facing billing/subscription defaults (demo)
+    subscriptionStatus: 'active',
+    subscriptionNumber,
+    subscriptionStartDate: '2026-01-01',
+    billingPlan: 'Monthly – unlimited users – €19.99 / month (excl. VAT)',
+
+    // Contact info (based on step 1 user)
+    contact: {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: 'Account administrator',
+      phone: ''
+    },
+
+    // Invoice settings (demo)
+    invoiceEmail: user.email,
+    billingAddress: {
+      line1: safeText(company_name),
+      street: safeText(street),
+      postalCode: safeText(postal_code),
+      city: safeText(city),
+      country: safeText(country)
+    }
   });
+
+  // Seed employees for demo (can be replaced by real DB later)
+  // Keep the signup contact account separate from employee users.
+  employeesByCompanyId.set(companyId, [
+    {
+      id: 'U-001',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      status: 'Active',
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: null
+    }
+  ]);
 
   user.status = 'active';
   user.companyId = companyId;
@@ -211,15 +288,19 @@ app.post('/api/login', (req, res) => {
 // API: Current user
 // =========================================================
 app.get('/api/me', (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
+  const token = getTokenFromRequest(req);
 
-  if (!sessionsByToken.has(token)) {
+  if (!token || !sessionsByToken.has(token)) {
     return res.status(401).json({ ok: false });
   }
 
   const { email } = sessionsByToken.get(token);
   const user = usersByEmail.get(email);
+
+  if (!user || user.status !== 'active') {
+    sessionsByToken.delete(token);
+    return res.status(401).json({ ok: false });
+  }
 
   res.json({
     ok: true,
@@ -228,6 +309,54 @@ app.get('/api/me', (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       companyId: user.companyId
+    }
+  });
+});
+
+// =========================================================
+// API: Logout (invalidate current token)
+// =========================================================
+app.post('/api/logout', requireAuth, (req, res) => {
+  sessionsByToken.delete(req.auth.token);
+  res.json({ ok: true });
+});
+
+// =========================================================
+// API: Company record (read-only in portal)
+// =========================================================
+app.get('/api/company', requireAuth, (req, res) => {
+  const { user } = req.auth;
+  const company = companiesById.get(user.companyId);
+  if (!company) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+  res.json({ ok: true, company });
+});
+
+// =========================================================
+// API: Employees (client-managed list)
+// =========================================================
+app.get('/api/employees', requireAuth, (req, res) => {
+  const { user } = req.auth;
+  const list = employeesByCompanyId.get(user.companyId) || [];
+  res.json({ ok: true, employees: list });
+});
+
+// Small dashboard stats helper
+app.get('/api/stats', requireAuth, (req, res) => {
+  const { user } = req.auth;
+  const employees = employeesByCompanyId.get(user.companyId) || [];
+  const activeEmployees = employees.filter(e => e.status === 'Active').length;
+
+  // Demo numbers for now
+  const today = new Date().toISOString().slice(0, 10);
+  const checkinsToday = Math.max(0, activeEmployees * 3 + (today.charCodeAt(today.length - 1) % 7));
+
+  res.json({
+    ok: true,
+    stats: {
+      employeesTotal: employees.length,
+      employeesActive: activeEmployees,
+      checkinsToday
     }
   });
 });

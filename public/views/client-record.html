@@ -52,46 +52,40 @@
   <div class="client-grid">
     <div class="client-field">
       <div class="client-field-label">Company name</div>
-      <div class="client-field-value">Demo Company NV</div>
+      <div class="client-field-value" id="cr-company-name">–</div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Company ID</div>
-      <div class="client-field-value">C-000127</div>
+      <div class="client-field-value" id="cr-company-code">–</div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">VAT number</div>
-      <div class="client-field-value">BE 0123.456.789</div>
+      <div class="client-field-value" id="cr-vat">–</div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Billing plan</div>
-      <div class="client-field-value">
-        Monthly – unlimited users – €19.99 / month (excl. VAT)
-      </div>
+      <div class="client-field-value" id="cr-plan">–</div>
     </div>
 
     <div class="client-field client-field--full">
       <div class="client-field-label">Registered address</div>
-      <div class="client-field-value client-field-value--multiline">
-        Industriepark 12<br>
-        9000 Ghent<br>
-        Belgium
-      </div>
+      <div class="client-field-value client-field-value--multiline" id="cr-registered-address">–</div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Main contact</div>
       <div class="client-field-value">
-        Jan Janssens<br>
-        <span class="client-field-muted">Operations Manager</span>
+        <span id="cr-contact-name">–</span><br>
+        <span class="client-field-muted" id="cr-contact-role"></span>
       </div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Contact e-mail</div>
-      <div class="client-field-value">hr@democompany.be</div>
+      <div class="client-field-value" id="cr-contact-email">–</div>
     </div>
 
     <div class="client-field">
@@ -101,27 +95,25 @@
 
     <div class="client-field">
       <div class="client-field-label">Estimated number of users</div>
-      <div class="client-field-value">40</div>
+      <div class="client-field-value" id="cr-est-users">–</div>
     </div>
 
     <div class="client-field client-field--full">
       <div class="client-field-label">Billing address</div>
       <div class="client-field-value client-field-value--multiline">
-        Finance Dept – Demo Company NV<br>
-        PO Box 23<br>
-        9000 Ghent – Belgium
+        Same as registered address.
       </div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Invoices sent to</div>
-      <div class="client-field-value">invoices@democompany.be</div>
+      <div class="client-field-value" id="cr-invoice-email">–</div>
     </div>
 
     <div class="client-field">
       <div class="client-field-label">Billing reference / PO</div>
       <div class="client-field-value">
-        PO-2026-0012
+        <span id="cr-billing-ref">–</span>
         <span class="client-field-tag">optional</span>
       </div>
     </div>

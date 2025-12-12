@@ -3,6 +3,37 @@
 const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
 const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
 
+function getAuthToken() {
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+async function apiFetch(url, options = {}) {
+  const token = getAuthToken();
+  const headers = Object.assign({}, options.headers || {});
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return fetch(url, { ...options, headers });
+}
+
+async function requireSessionOrRedirect() {
+  const token = getAuthToken();
+  if (!token) {
+    window.location.href = "/login";
+    return false;
+  }
+
+  const res = await apiFetch("/api/me", { cache: "no-cache" });
+  if (!res.ok) {
+    try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+    window.location.href = "/login";
+    return false;
+  }
+  return true;
+}
+
 async function loadView(viewName) {
   try {
     const response = await fetch(`views/${viewName}.html`, { cache: "no-cache" });
@@ -52,13 +83,14 @@ function initLogout() {
   const btn = document.getElementById("logoutBtn");
   if (!btn) return;
 
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     try {
-      window.localStorage.removeItem(AUTH_TOKEN_KEY);
-    } catch (e) {
-      // no-op
+      await apiFetch("/api/logout", { method: "POST" });
+    } catch {
+      // ignore
     }
-    window.location.href = "/login.html";
+    try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+    window.location.href = "/login";
   });
 }
 
@@ -186,6 +218,18 @@ function initView(viewName) {
     initSubscriptionControls();
   }
 
+  if (viewName === "dashboard") {
+    hydrateDashboard();
+  }
+
+  if (viewName === "client-record") {
+    hydrateClientRecord();
+  }
+
+  if (viewName === "users") {
+    hydrateUsers();
+  }
+
   // For other views we can add logic later (users, reports, etc.)
 }
 
@@ -194,7 +238,114 @@ function initView(viewName) {
 --------------------------------*/
 
 document.addEventListener("DOMContentLoaded", () => {
-  initTabs();
-  initLogout();
-  loadView("dashboard");
+  (async () => {
+    const ok = await requireSessionOrRedirect();
+    if (!ok) return;
+
+    initTabs();
+    initLogout();
+    loadView("dashboard");
+  })();
 });
+
+/* ------------------------------
+   View hydration (API → UI)
+--------------------------------*/
+
+async function hydrateDashboard() {
+  try {
+    const res = await apiFetch("/api/stats", { cache: "no-cache" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load stats");
+
+    const s = data.stats || {};
+    const elUsers = document.getElementById("kpi-users-total");
+    const elActive = document.getElementById("kpi-users-active");
+    const elCheckins = document.getElementById("kpi-checkins-today");
+
+    if (elUsers) elUsers.textContent = String(s.employeesTotal ?? "–");
+    if (elActive) elActive.textContent = String(s.employeesActive ?? "–");
+    if (elCheckins) elCheckins.textContent = String(s.checkinsToday ?? "–");
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+async function hydrateClientRecord() {
+  try {
+    const res = await apiFetch("/api/company", { cache: "no-cache" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load company");
+
+    const c = data.company || {};
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value || "–";
+    };
+
+    set("cr-company-name", c.name);
+    set("cr-company-code", c.code);
+    set("cr-vat", c.vatNumber);
+    set("cr-plan", c.billingPlan);
+    set("cr-contact-name", `${c.contact?.firstName || ""} ${c.contact?.lastName || ""}`.trim());
+    set("cr-contact-role", c.contact?.role || "");
+    set("cr-contact-email", c.contact?.email || "");
+    set("cr-est-users", c.employeeCount !== undefined ? String(c.employeeCount) : "–");
+    set("cr-invoice-email", c.invoiceEmail || "");
+    set("cr-billing-ref", c.billingReference || "–");
+
+    const addr = [c.street, `${c.postalCode || ""} ${c.city || ""}`.trim(), c.country]
+      .filter(Boolean)
+      .join("\n");
+    const addrEl = document.getElementById("cr-registered-address");
+    if (addrEl) addrEl.innerHTML = addr ? addr.split("\n").map(line => `${escapeHtml(line)}<br>`).join("") : "–";
+
+    // subscription meta
+    const metaEl = document.getElementById("client-status-meta");
+    if (metaEl) {
+      metaEl.innerHTML = `Subscription no.: <strong>${escapeHtml(c.subscriptionNumber || "–")}</strong><br>
+        Start date: <strong>${escapeHtml(c.subscriptionStartDate || "–")}</strong>`;
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+async function hydrateUsers() {
+  try {
+    const res = await apiFetch("/api/employees", { cache: "no-cache" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load users");
+
+    const tbody = document.getElementById("users-tbody");
+    if (!tbody) return;
+
+    const rows = (data.employees || []).map((u) => {
+      const end = u.endDate ? escapeHtml(u.endDate) : "–";
+      return `
+        <tr>
+          <td>${escapeHtml(u.id)}</td>
+          <td>${escapeHtml(`${u.firstName} ${u.lastName}`)}</td>
+          <td>${escapeHtml(u.status)}</td>
+          <td>${escapeHtml(u.startDate || "–")}</td>
+          <td>${end}</td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = rows.join("") || `
+      <tr><td colspan="5" class="table-empty">No users yet.</td></tr>
+    `;
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
