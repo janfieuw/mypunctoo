@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Zorg dat __dirname werkt
+// Zorg dat __dirname werkt in Node
 const rootDir = __dirname;
 
 // ===== Middleware =====
