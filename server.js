@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Zorg dat __dirname werkt in Node (zeker op sommige bundlers)
+// Zorg dat __dirname werkt
 const rootDir = __dirname;
 
 // ===== Middleware =====
@@ -231,7 +231,7 @@ app.post('/api/signup/step2', (req, res) => {
   companiesById.set(companyId, company);
 
   // User updaten
-  user.status = 'active'; // of 'pending_email_verification' als je mail wil sturen
+  user.status = 'active';
   user.companyId = companyId;
 
   // Token ongeldig maken
@@ -292,7 +292,7 @@ app.post('/api/login', (req, res) => {
   return res.json({
     ok: true,
     token: sessionToken,
-    redirectUrl: '/', // dashboard / index.html
+    redirectUrl: '/index.html',
     user: {
       email: user.email,
       firstName: user.firstName,
