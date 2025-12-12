@@ -12,6 +12,23 @@ const rootDir = __dirname;
 // ===== Middleware =====
 app.use(express.json());
 
+/* =========================================================
+   BELANGRIJK:
+   .html requests afvangen vóór express.static
+   Anders serveert Express het bestand direct en ziet je redirect het nooit.
+========================================================= */
+app.use((req, res, next) => {
+  if (!req.path.endsWith('.html')) return next();
+
+  // Specifieke legacy redirects
+  if (req.path === '/login.html') return res.redirect(301, '/login');
+  if (req.path === '/signup.html') return res.redirect(301, '/signup');
+  if (req.path === '/index.html') return res.redirect(301, '/app');
+
+  // Alles anders met .html: weg ermee (clean/professioneel)
+  return res.status(404).send('Not found');
+});
+
 // Statische files (frontend) uit /public
 app.use(express.static(path.join(rootDir, 'public')));
 
@@ -34,20 +51,6 @@ app.get('/login', (req, res) => {
 
 app.get('/app', (req, res) => {
   res.sendFile(path.join(rootDir, 'public', 'index.html'));
-});
-
-/* =========================================================
-   Backwards compatibility: oude .html URLs doorsturen
-   (zodat je niks “breekt” bij oude bookmarks)
-========================================================= */
-app.get('/signup.html', (req, res) => res.redirect(301, '/signup'));
-app.get('/login.html', (req, res) => res.redirect(301, '/login'));
-app.get('/index.html', (req, res) => res.redirect(301, '/app'));
-
-// (optioneel) alles wat nog .html is: 404 of redirect.
-// Hier doen we 404 om het echt “clean” te houden.
-app.get('/*.html', (req, res) => {
-  res.status(404).send('Not found');
 });
 
 /* =========================================================
@@ -258,7 +261,6 @@ app.post('/api/signup/step2', (req, res) => {
   return res.json({
     ok: true,
     message: 'Your account and company profile have been created successfully.',
-    // ✅ professionele URL
     redirectUrl: '/login'
   });
 });
@@ -310,7 +312,6 @@ app.post('/api/login', (req, res) => {
   return res.json({
     ok: true,
     token: sessionToken,
-    // ✅ professionele URL
     redirectUrl: '/app',
     user: {
       email: user.email,
