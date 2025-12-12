@@ -1,6 +1,7 @@
 // js/app.js
 
 const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
+const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
 
 async function loadView(viewName) {
   try {
@@ -24,13 +25,40 @@ async function loadView(viewName) {
 
 function initTabs() {
   const buttons = document.querySelectorAll(".nav-btn");
+
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.view;
-      buttons.forEach((b) => b.classList.remove("active"));
+
+      // ✅ Belangrijk: alleen knoppen met data-view zijn tabs
+      if (!target) return;
+
+      buttons.forEach((b) => {
+        // enkel tab-knoppen krijgen active state
+        if (b.dataset.view) b.classList.remove("active");
+      });
+
       btn.classList.add("active");
       loadView(target);
     });
+  });
+}
+
+/* ------------------------------
+   Logout
+--------------------------------*/
+
+function initLogout() {
+  const btn = document.getElementById("logoutBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch (e) {
+      // no-op
+    }
+    window.location.href = "/login.html";
   });
 }
 
@@ -167,5 +195,6 @@ function initView(viewName) {
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
+  initLogout();
   loadView("dashboard");
 });
