@@ -6,8 +6,6 @@
   const statusEl = document.getElementById("status");
   const loginButton = document.getElementById("loginButton");
 
-  const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
-
   function setStatus(message, isError = false) {
     if (!statusEl) return;
     statusEl.textContent = message || "";
@@ -58,10 +56,7 @@
       try {
         const data = await callLogin(email, password);
 
-        if (data.token) {
-          window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-        }
-
+        // Geen token-gedoe: server stuurt enkel redirectUrl
         setStatus("Login succesvol.", false);
 
         const redirectUrl = data.redirectUrl || "/index.html";
