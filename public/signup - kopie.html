@@ -9,18 +9,524 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- New shared auth stylesheet -->
-  <link rel="stylesheet" href="/css/auth.css">
+  <style>
+    :root {
+      --bg: #200b1b;
+      --panel: #ffffff;
+      --panel-muted: #f8fafc;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #FDC500;
+      --blue: #1d4ed8;
+      --blue-deep: #0b2a7a;
+      --radius: 22px;
+      --radius-pill: 999px;
+      --shadow: 0 30px 70px rgba(2, 6, 23, 0.35);
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(circle at top left, #0f172a, #020617);
+      color: var(--text);
+    }
+
+    .page-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+    }
+
+    .card {
+      width: min(1100px, 100%);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+    }
+
+    .card-main {
+      background: var(--panel);
+      padding: 38px 44px;
+    }
+
+    
+    .card-aside {
+      background: linear-gradient(180deg, #121b36, #262628);   
+      padding: 34px 34px;
+      color: #ebe6e5;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .auth-switch {
+      font-size: 0.85rem;
+      color: #475569;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .auth-switch a {
+      color: #1d4ed8;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .hero-title {
+      font-family: var(--mono);
+      font-size: 1.35rem;
+      margin: 6px 0 6px;
+      letter-spacing: 0.2px;
+    }
+
+    .hero-subtitle {
+      margin: 0 0 18px;
+      color: #64748b;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      max-width: 52ch;
+    }
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 22px;
+    }
+
+    .step-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      color: #475569;
+      background: #ffffff;
+      transition: 150ms ease;
+      user-select: none;
+      font-family: var(--mono);
+    }
+
+    .step-pill span {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 0.75rem;
+    }
+
+    .step-pill.active {
+      border-color: rgba(29, 78, 216, 0.4);
+      background: rgba(29, 78, 216, 0.06);
+      color: #0f172a;
+    }
+
+    .step-pill.active span {
+      background: rgba(253, 197, 0, 0.9);
+    }
+
+    .step-divider {
+      height: 1px;
+      flex: 1;
+      background: #e2e8f0;
+      opacity: 0.8;
+    }
+
+    .form-error,
+    .form-status {
+      display: none;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      margin: 10px 0 14px;
+      line-height: 1.35;
+    }
+
+    .form-error.visible {
+      display: block;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .form-status.visible {
+      display: block;
+      background: #ecfeff;
+      border: 1px solid #a5f3fc;
+      color: #155e75;
+    }
+
+    form {
+      margin-top: 18px;
+    }
+
+    .form-step {
+      display: none;
+    }
+
+    .form-step.active {
+      display: block;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-size: 0.82rem;
+      color: #0f172a;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .required-dot {
+      color: #ef4444;
+      font-size: 0.95rem;
+      line-height: 0;
+      margin-top: 2px;
+    }
+
+    input, select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid #cbd5e1;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      outline: none;
+      background: #f8fafc;
+      font-family: var(--mono);
+    }
+
+    input:focus, select:focus {
+      border-color: rgba(29,78,216,0.6);
+      box-shadow: 0 0 0 4px rgba(29,78,216,0.12);
+      background: #fff;
+    }
+
+    .help-text {
+      font-size: 0.74rem;
+      color: #64748b;
+      margin-top: -8px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 6px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      border-radius: 6px;
+    }
+
+    .checkbox-row span {
+      font-size: 0.78rem;
+      color: #475569;
+      line-height: 1.35;
+      font-family: var(--mono);
+    }
+
+    .form-navigation {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .nav-hint {
+      font-family: var(--mono);
+      color: #475569;
+      font-size: 0.78rem;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+      border: 1px solid transparent;
+      border-radius: var(--radius-pill);
+      padding: 10px 16px;
+      font-weight: 700;
+      font-family: var(--mono);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: 140ms ease;
+      letter-spacing: 0.2px;
+      font-size: 0.85rem;
+      user-select: none;
+    }
+
+    .btn-primary {
+      background: #111827;
+      color: #f8fafc;
+      border-color: #111827;
+      opacity: 0.88;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #111827;
+      opacity: 1;
+    }
+
+    .btn-primary.active { opacity: 1; }
+
+    .btn-secondary {
+      background: transparent;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+
+    .btn-secondary:hover {
+      border-color: #94a3b8;
+      transform: translateY(-1px);
+    }
+
+    .card-aside::after {
+      content: "";
+      position: absolute;
+      inset: -140px -120px auto auto;
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle, rgba(253,197,0,0.22), transparent 70%);
+      transform: rotate(15deg);
+      pointer-events: none;
+    }
+
+    .aside-tag {
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(255,255,255,0.24);
+      padding: 6px 10px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: rgba(255,255,255,0.92);
+      backdrop-filter: blur(6px);
+      background: rgba(15, 23, 42, 0.6);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .aside-tag-dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.12);
+    }
+
+    .aside-title {
+      margin-top: 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .aside-list {
+      margin: 1rem 0 0;
+      padding-left: 1.2rem;
+      font-size: 0.8rem;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .aside-list li::marker { color: var(--accent); }
+
+    .aside-footer {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .aside-footer strong { color: #e5e7eb; }
+
+    .pill-status {
+      align-self: flex-start;
+      padding: 0.25rem 0.7rem;
+      border-radius: var(--radius-pill);
+      border: 1px dashed rgba(191, 219, 254, 0.7);
+      font-size: 0.7rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .pill-status-dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 999px;
+      background: #22c55e;
+    }
+
+    .brand-logo {
+      height: 38px;
+      width: auto;
+      display: block;
+    }
+
+    @media (max-width: 980px) {
+      .card { grid-template-columns: 1fr; }
+      .card-aside { display: none; }
+    }
+    /* ===== Mobile responsiveness ===== */
+@media (max-width: 980px) {
+  .card { grid-template-columns: 1fr; }
+  .card-aside { display: none; }
+}
+
+@media (max-width: 560px) {
+  .page-wrapper { padding: 14px; }
+
+  .card {
+    border-radius: 18px;
+  }
+
+  .card-main {
+    padding: 22px 18px;
+  }
+
+  .brand-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .auth-switch {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .hero-title {
+    font-size: 1.15rem;
+    line-height: 1.25;
+  }
+
+  .hero-subtitle {
+    font-size: 0.88rem;
+  }
+
+  /* 2 kolommen velden -> 1 kolom */
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  input, select {
+    font-size: 16px; /* voorkomt iOS zoom */
+    border-radius: 14px;
+  }
+
+  /* step pills mogen wrappen */
+  .step-indicator {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .step-divider {
+    display: none;
+  }
+
+  /* Navigation: knoppen onder elkaar en full width */
+  .form-navigation {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .nav-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .nav-right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+  }
+}
+
+  </style>
 </head>
 
 <body>
-  <div class="auth-wrap">
-    <div class="auth-card">
+  <div class="page-wrapper">
+    <div class="card">
       <!-- MAIN: SIGNUP FORM -->
-      <div class="auth-main">
+      <div class="card-main">
         <div class="brand-row">
           <a href="/" class="brand">
-            <img src="/assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
+            <img src="assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
           </a>
 
           <div class="auth-switch">
@@ -30,8 +536,8 @@
         </div>
 
         <div>
-          <h2 class="auth-title">Create your MyPunctoo workspace</h2>
-          <p class="auth-subtitle">
+          <h2 class="hero-title">Create your MyPunctoo workspace</h2>
+          <p class="hero-subtitle">
             Two short steps to connect your company to a compliant digital time tracking system.
           </p>
 
@@ -190,21 +696,23 @@
         </form>
       </div>
 
-      <!-- ASIDE (desktop only) -->
-      <div class="auth-aside">
-        <div class="aside-tag" id="asideTag">
-          <span class="aside-tag-dot"></span>
-          Step 1: admin + password
+      <!-- ASIDE -->
+      <div class="card-aside">
+        <div>
+          <div class="aside-tag" id="asideTag">
+            <span class="aside-tag-dot"></span>
+            Step 1: admin + password
+          </div>
+
+          <h2 class="aside-title" id="asideTitle">Ready for the 2027 time tracking rules.</h2>
+
+          <ul class="aside-list" id="asideList">
+            <li>Secure admin account linked to your company.</li>
+            <li>Company profile used for inspections and reports.</li>
+            <li>Connect physical QR badge and digital timesheets.</li>
+            <li>No hardware investment, cloud-based and scalable.</li>
+          </ul>
         </div>
-
-        <h2 class="aside-title" id="asideTitle">Ready for the 2027 time tracking rules.</h2>
-
-        <ul class="aside-list" id="asideList">
-          <li>Secure admin account linked to your company.</li>
-          <li>Company profile used for inspections and reports.</li>
-          <li>Connect physical QR badge and digital timesheets.</li>
-          <li>No hardware investment, cloud-based and scalable.</li>
-        </ul>
 
         <div class="aside-footer" id="asideFooter">
           <div class="pill-status" id="asideStatusPill">
@@ -415,7 +923,8 @@
           const data = await callApi(API_STEP2, payload);
 
           showError('');
-          showStatus(data.message || 'Your account and company profile have been created successfully.');
+          let msg = data.message || 'Your account and company profile have been created successfully.';
+          showStatus(msg);
 
           form.classList.add('completed');
           step1.style.display = 'none';
@@ -431,7 +940,8 @@
           `;
 
           if (data.redirectUrl) {
-            window.location.href = data.redirectUrl; // /login
+            // ✅ backend geeft nu /login terug (clean)
+            window.location.href = data.redirectUrl;
           }
         } catch (err) {
           showError(err.message);
@@ -441,10 +951,12 @@
         }
       });
 
+      // Form nooit klassiek submitten
       form.addEventListener('submit', function (e) {
         e.preventDefault();
       });
 
+      // init
       goToStep(1);
     })();
   </script>
