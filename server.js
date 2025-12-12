@@ -25,6 +25,7 @@ app.get('/login', (req, res) => {
 const usersByEmail = new Map();      // email -> user object
 const signupTokens = new Map();      // token -> { email, createdAt }
 const companiesById = new Map();     // companyId -> company object
+const sessionsByToken = new Map();   // sessionToken -> { email, companyId, createdAt }
 
 // Kleine helper om e-mail te checken
 function isValidEmail(email) {
@@ -280,11 +281,65 @@ app.post('/api/login', (req, res) => {
 
   console.log('LOGIN OK:', user.email);
 
-  // In productie zou je hier een session of JWT aanmaken.
-  // Voor nu: stuur enkel een redirectUrl naar het dashboard.
+  // Eenvoudige in-memory session token
+  const sessionToken = uuidv4();
+  sessionsByToken.set(sessionToken, {
+    email: user.email,
+    companyId: user.companyId,
+    createdAt: new Date().toISOString()
+  });
+
   return res.json({
     ok: true,
-    redirectUrl: '/'
+    token: sessionToken,
+    redirectUrl: '/', // dashboard / index.html
+    user: {
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      companyId: user.companyId
+    }
+  });
+});
+
+// ===== API: Session check / current user =====
+app.get('/api/me', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const parts = authHeader.split(' ');
+
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({
+      ok: false,
+      error: 'No valid Authorization header.'
+    });
+  }
+
+  const token = parts[1];
+  if (!token || !sessionsByToken.has(token)) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Invalid or expired session.'
+    });
+  }
+
+  const session = sessionsByToken.get(token);
+  const user = usersByEmail.get(session.email);
+
+  if (!user) {
+    return res.status(401).json({
+      ok: false,
+      error: 'User not found for this session.'
+    });
+  }
+
+  return res.json({
+    ok: true,
+    user: {
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      companyId: user.companyId
+    }
   });
 });
 

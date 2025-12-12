@@ -1,5 +1,33 @@
 <!doctype html>
 <html lang="en">
+    <script>
+    (function () {
+      const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
+      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+
+      if (!token) {
+        window.location.href = "/login.html";
+        return;
+      }
+
+      // Optioneel: token valideren bij de server
+      fetch("/api/me", {
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }).then(function (res) {
+        if (!res.ok) {
+          window.localStorage.removeItem(AUTH_TOKEN_KEY);
+          window.location.href = "/login.html";
+        }
+      }).catch(function () {
+        // Bij error gewoon terug naar login
+        window.localStorage.removeItem(AUTH_TOKEN_KEY);
+        window.location.href = "/login.html";
+      });
+    })();
+  </script>
+
 <head>
   <meta charset="UTF-8">
   <title>MyPunctoo – Client Portal</title>

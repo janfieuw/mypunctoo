@@ -166,13 +166,13 @@
     }
 
     .hero-title {
-      font-size: 1.6rem;
+      font-size: 1.2rem;
       font-weight: 600;
       letter-spacing: 0.03em;
     }
 
     .hero-subtitle {
-      font-size: 0.9rem;
+      font-size: 0.7rem;
       color: var(--muted-text);
       max-width: 26rem;
       line-height: 1.5;
@@ -527,6 +527,12 @@
       border-radius: 999px;
       background: #22c55e;
     }
+    .brand-logo {
+  height: 38px;            /* hoogte van het logo */
+  width: auto;
+  display: block;
+}
+
   </style>
 </head>
 <body>
@@ -535,21 +541,19 @@
     <!-- MAIN: SIGNUP FORM -->
     <div class="card-main">
       <div class="brand-row">
-        <div class="brand">
-          <div class="brand-mark">MP</div>
-          <div>
-            <div class="brand-text-main">MyPunctoo</div>
-            <div class="brand-text-sub">Digital time tracking</div>
-          </div>
-        </div>
-        <div class="auth-switch">
-          Already have an account?
-          <a href="/login">Sign in</a>
-        </div>
-      </div>
+  <a href="/" class="brand">
+    <img src="assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
+  </a>
+    
+  <div class="auth-switch">
+    Allready have an account?
+    <a href="/login">Sign in</a>
+  </div>
+</div>
+
 
       <div>
-        <h1 class="hero-title">Create your MyPunctoo workspace</h1>
+        <h2 class="hero-title">Create your MyPunctoo workspace</h2>
         <p class="hero-subtitle">
           Two short steps to connect your company to a compliant digital time tracking system.
         </p>
