@@ -60,7 +60,9 @@
       }
 
       window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-      window.location.href = data.redirectUrl || "/index.html";
+
+      // ✅ naar mooie route
+      window.location.href = data.redirectUrl || "/app";
     } catch (err) {
       setStatus(err?.message || "Login failed.", true);
     } finally {
