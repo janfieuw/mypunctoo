@@ -1,6 +1,8 @@
 const express = require('express');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const { pool } = require('./db/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,13 +38,10 @@ app.get('/login', (_, res) => res.sendFile(path.join(rootDir, 'public', 'login.h
 app.get('/app', (_, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
 
 // =========================================================
-// In-memory storage (DEMO)
+// In-memory (alleen voor signup drafts + sessions)
 // =========================================================
-const usersByEmail = new Map();
-const signupTokens = new Map();
-const companiesById = new Map();
-const sessionsByToken = new Map();
-const employeesByCompanyId = new Map();
+const signupTokens = new Map(); // signupToken -> { email, passHash, status, draftCompany }
+const sessionsByToken = new Map(); // sessionToken -> { userId }
 
 // =========================================================
 // Helpers
@@ -66,21 +65,31 @@ function getTokenFromRequest(req) {
   return auth.startsWith('Bearer ') ? auth.slice(7) : '';
 }
 
-function requireAuth(req, res, next) {
-  const token = getTokenFromRequest(req);
-  if (!token || !sessionsByToken.has(token)) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
+async function requireAuth(req, res, next) {
+  try {
+    const token = getTokenFromRequest(req);
+    if (!token || !sessionsByToken.has(token)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
 
-  const { email } = sessionsByToken.get(token);
-  const user = usersByEmail.get(email);
-  if (!user || user.status !== 'active') {
-    sessionsByToken.delete(token);
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
+    const { userId } = sessionsByToken.get(token);
 
-  req.auth = { token, user };
-  next();
+    const { rows } = await pool.query(
+      'SELECT id, email, role, is_active, customer_id FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+
+    if (!rows.length || rows[0].is_active !== true) {
+      sessionsByToken.delete(token);
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+
+    req.auth = { token, user: rows[0] };
+    next();
+  } catch (err) {
+    console.error('requireAuth error:', err);
+    return res.status(500).json({ ok: false, error: 'Server error.' });
+  }
 }
 
 const LOWER_WORDS = new Set(['de','der','den','van','von','da','di','la','le','du','des','of','and']);
@@ -123,7 +132,7 @@ function clamp(n, min, max) {
 }
 
 // =========================================================
-// Pricing (DEMO constants)
+// Pricing
 // =========================================================
 const PRICING = {
   startupFee: 49,
@@ -132,284 +141,354 @@ const PRICING = {
 };
 
 // =========================================================
+// DB helpers
+// =========================================================
+async function emailExists(emailLower) {
+  const { rows } = await pool.query(
+    'SELECT 1 FROM users WHERE email = $1 LIMIT 1',
+    [emailLower]
+  );
+  return rows.length > 0;
+}
+
+// =========================================================
 // API: Signup step 1 (Account: email + password)
 // =========================================================
-app.post('/api/signup/step1', (req, res) => {
-  const { email, password, password_confirm } = req.body || {};
+app.post('/api/signup/step1', async (req, res) => {
+  try {
+    const { email, password, password_confirm } = req.body || {};
 
-  if (!email || !password || !password_confirm) {
-    return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    if (!email || !password || !password_confirm) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Invalid e-mail address.' });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({ ok: false, error: 'Password too short.' });
+    }
+
+    if (password !== password_confirm) {
+      return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
+    }
+
+    const key = String(email).trim().toLowerCase();
+    if (await emailExists(key)) {
+      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
+    }
+
+    const passHash = await bcrypt.hash(String(password), 10);
+
+    const signupToken = uuidv4();
+    signupTokens.set(signupToken, {
+      email: key,
+      passHash,
+      status: 'pending_step2',
+      draftCompany: null
+    });
+
+    res.json({ ok: true, signupToken });
+  } catch (err) {
+    console.error('signup step1 error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
   }
-
-  if (!isValidEmail(email)) {
-    return res.status(400).json({ ok: false, error: 'Invalid e-mail address.' });
-  }
-
-  if (String(password).length < 8) {
-    return res.status(400).json({ ok: false, error: 'Password too short.' });
-  }
-
-  if (password !== password_confirm) {
-    return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
-  }
-
-  const key = String(email).trim().toLowerCase();
-  if (usersByEmail.has(key)) {
-    return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
-  }
-
-  usersByEmail.set(key, {
-    id: uuidv4(),
-    firstName: '',
-    lastName: '',
-    email: key,
-    passwordPlain: password, // demo only
-    status: 'pending_step2',
-    companyId: null,
-    draftCompany: null,
-    draftOrder: null
-  });
-
-  const signupToken = uuidv4();
-  signupTokens.set(signupToken, { email: key });
-
-  res.json({ ok: true, signupToken });
 });
 
 // =========================================================
 // API: Signup step 2 (Company details saved; no activation yet)
 // =========================================================
-app.post('/api/signup/step2', (req, res) => {
-  const {
-    signup_token,
-    email,
-    password,
+app.post('/api/signup/step2', async (req, res) => {
+  try {
+    const {
+      signup_token,
+      email,
+      password,
 
-    company_name,
-    enterprise_number,
-    website,
+      company_name,
+      enterprise_number,
+      website,
 
-    registered_street,
-    registered_box,
-    registered_postal_code,
-    registered_city,
-    registered_country_code,
+      registered_street,
+      registered_box,
+      registered_postal_code,
+      registered_city,
+      registered_country_code,
 
-    billing_email,
-    billing_reference,
+      billing_email,
+      billing_reference,
 
-    delivery_is_different,
-    delivery_street,
-    delivery_box,
-    delivery_postal_code,
-    delivery_city,
-    delivery_country_code
-  } = req.body || {};
+      delivery_is_different,
+      delivery_street,
+      delivery_box,
+      delivery_postal_code,
+      delivery_city,
+      delivery_country_code
+    } = req.body || {};
 
-  if (!signup_token || !signupTokens.has(signup_token)) {
-    return res.status(400).json({ ok: false, error: 'Signup session expired.' });
-  }
-
-  const { email: tokenEmail } = signupTokens.get(signup_token);
-  const user = usersByEmail.get(tokenEmail);
-
-  const emailKey = String(email || '').trim().toLowerCase();
-  if (!user || user.email !== emailKey || user.passwordPlain !== password) {
-    return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-  }
-
-  if (user.status !== 'pending_step2') {
-    return res.status(400).json({ ok: false, error: 'Unexpected signup state.' });
-  }
-
-  if (
-    !company_name ||
-    !enterprise_number ||
-    !registered_street ||
-    !registered_postal_code ||
-    !registered_city ||
-    !registered_country_code ||
-    !billing_email
-  ) {
-    return res.status(400).json({ ok: false, error: 'Missing company fields.' });
-  }
-
-  const regCountry = String(registered_country_code).toUpperCase();
-  if (!EU_COUNTRIES.has(regCountry)) {
-    return res.status(400).json({ ok: false, error: 'Invalid country code.' });
-  }
-
-  const billingEmailKey = String(billing_email).trim().toLowerCase();
-  if (!isValidEmail(billingEmailKey)) {
-    return res.status(400).json({ ok: false, error: 'Invalid billing e-mail address.' });
-  }
-
-  const deliveryIsDifferent = !!delivery_is_different;
-
-  let delCountry = '';
-  if (deliveryIsDifferent) {
-    if (!delivery_street || !delivery_postal_code || !delivery_city || !delivery_country_code) {
-      return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
+    if (!signup_token || !signupTokens.has(signup_token)) {
+      return res.status(400).json({ ok: false, error: 'Signup session expired.' });
     }
-    delCountry = String(delivery_country_code).toUpperCase();
-    if (!EU_COUNTRIES.has(delCountry)) {
-      return res.status(400).json({ ok: false, error: 'Invalid delivery country code.' });
+
+    const s = signupTokens.get(signup_token);
+
+    const emailKey = String(email || '').trim().toLowerCase();
+    if (s.email !== emailKey) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
     }
+
+    const okPass = await bcrypt.compare(String(password || ''), s.passHash);
+    if (!okPass) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
+    }
+
+    if (s.status !== 'pending_step2') {
+      return res.status(400).json({ ok: false, error: 'Unexpected signup state.' });
+    }
+
+    if (
+      !company_name ||
+      !enterprise_number ||
+      !registered_street ||
+      !registered_postal_code ||
+      !registered_city ||
+      !registered_country_code ||
+      !billing_email
+    ) {
+      return res.status(400).json({ ok: false, error: 'Missing company fields.' });
+    }
+
+    const regCountry = String(registered_country_code).toUpperCase();
+    if (!EU_COUNTRIES.has(regCountry)) {
+      return res.status(400).json({ ok: false, error: 'Invalid country code.' });
+    }
+
+    const billingEmailKey = String(billing_email).trim().toLowerCase();
+    if (!isValidEmail(billingEmailKey)) {
+      return res.status(400).json({ ok: false, error: 'Invalid billing e-mail address.' });
+    }
+
+    const deliveryIsDifferent = !!delivery_is_different;
+
+    let delCountry = '';
+    if (deliveryIsDifferent) {
+      if (!delivery_street || !delivery_postal_code || !delivery_city || !delivery_country_code) {
+        return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
+      }
+      delCountry = String(delivery_country_code).toUpperCase();
+      if (!EU_COUNTRIES.has(delCountry)) {
+        return res.status(400).json({ ok: false, error: 'Invalid delivery country code.' });
+      }
+    }
+
+    if (!isValidWebsite(website)) {
+      return res.status(400).json({ ok: false, error: 'Invalid website URL.' });
+    }
+
+    const websiteClean = safeText(website);
+    const websiteNormalized = websiteClean
+      ? (websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
+      : '';
+
+    s.draftCompany = {
+      name: toTitleCase(company_name),
+      enterpriseNumber: normalizeUpper(enterprise_number),
+      website: websiteNormalized || null,
+
+      registeredAddress: {
+        street: toTitleCase(registered_street),
+        box: normalizeUpper(registered_box),
+        postalCode: safeText(registered_postal_code),
+        city: toTitleCase(registered_city),
+        country: regCountry
+      },
+
+      billing: {
+        email: billingEmailKey,
+        reference: toTitleCase(billing_reference)
+      },
+
+      deliveryAddress: deliveryIsDifferent ? {
+        street: toTitleCase(delivery_street),
+        box: normalizeUpper(delivery_box),
+        postalCode: safeText(delivery_postal_code),
+        city: toTitleCase(delivery_city),
+        country: delCountry
+      } : null
+    };
+
+    s.status = 'pending_step3';
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('signup step2 error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
   }
-
-  if (!isValidWebsite(website)) {
-    return res.status(400).json({ ok: false, error: 'Invalid website URL.' });
-  }
-
-  const websiteClean = safeText(website);
-  const websiteNormalized = websiteClean
-    ? (websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
-    : '';
-
-  // Save as draft on user until step 3 confirms order
-  user.draftCompany = {
-    name: toTitleCase(company_name),
-    enterpriseNumber: normalizeUpper(enterprise_number),
-    website: websiteNormalized || null,
-
-    registeredAddress: {
-      street: toTitleCase(registered_street),
-      box: normalizeUpper(registered_box),
-      postalCode: safeText(registered_postal_code),
-      city: toTitleCase(registered_city),
-      country: regCountry
-    },
-
-    billing: {
-      email: billingEmailKey,
-      reference: toTitleCase(billing_reference)
-    },
-
-    deliveryAddress: deliveryIsDifferent ? {
-      street: toTitleCase(delivery_street),
-      box: normalizeUpper(delivery_box),
-      postalCode: safeText(delivery_postal_code),
-      city: toTitleCase(delivery_city),
-      country: delCountry
-    } : null
-  };
-
-  user.status = 'pending_step3';
-
-  res.json({ ok: true });
 });
 
 // =========================================================
-// API: Signup step 3 (Confirm order; activate account)
+// API: Signup step 3 (Confirm order; create customer + user in DB)
 // =========================================================
-app.post('/api/signup/step3', (req, res) => {
-  const { signup_token, email, password, extra_plates, sales_terms } = req.body || {};
+app.post('/api/signup/step3', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { signup_token, email, password, extra_plates, sales_terms } = req.body || {};
 
-  if (!signup_token || !signupTokens.has(signup_token)) {
-    return res.status(400).json({ ok: false, error: 'Signup session expired.' });
-  }
-
-  const { email: tokenEmail } = signupTokens.get(signup_token);
-  const user = usersByEmail.get(tokenEmail);
-
-  const emailKey = String(email || '').trim().toLowerCase();
-  if (!user || user.email !== emailKey || user.passwordPlain !== password) {
-    return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-  }
-
-  if (user.status !== 'pending_step3' || !user.draftCompany) {
-    return res.status(400).json({ ok: false, error: 'Missing company details.' });
-  }
-
-  if (!sales_terms) {
-    return res.status(400).json({ ok: false, error: 'Sales terms must be accepted.' });
-  }
-
-  const qty = clamp(intSafe(extra_plates, 0), 0, 99);
-
-  // Create company
-  const companyId = uuidv4();
-  const company = {
-    id: companyId,
-    ...user.draftCompany,
-
-    subscription: {
-      status: 'active',
-      plan: 'Monthly',
-      priceMonthlyExclVat: PRICING.monthlyFee,
-      startedAt: new Date().toISOString()
-    },
-
-    order: {
-      status: 'confirmed',
-      confirmedAt: new Date().toISOString(),
-      startupFeeExclVat: PRICING.startupFee,
-      extraPlatesQty: qty,
-      extraPlatePriceExclVat: PRICING.extraPlatePrice,
-      totalTodayExclVat: PRICING.startupFee + (qty * PRICING.extraPlatePrice),
-      monthlyExclVat: PRICING.monthlyFee,
-      salesTermsAccepted: true
-    },
-
-    contact: {
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      role: 'Account owner'
+    if (!signup_token || !signupTokens.has(signup_token)) {
+      return res.status(400).json({ ok: false, error: 'Signup session expired.' });
     }
-  };
 
-  companiesById.set(companyId, company);
-  employeesByCompanyId.set(companyId, []);
+    const s = signupTokens.get(signup_token);
 
-  // Activate user
-  user.status = 'active';
-  user.companyId = companyId;
-  user.draftCompany = null;
-  user.draftOrder = null;
+    const emailKey = String(email || '').trim().toLowerCase();
+    if (s.email !== emailKey) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
+    }
 
-  // End signup session
-  signupTokens.delete(signup_token);
+    const okPass = await bcrypt.compare(String(password || ''), s.passHash);
+    if (!okPass) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
+    }
 
-  res.json({ ok: true, redirectUrl: '/login' });
+    if (s.status !== 'pending_step3' || !s.draftCompany) {
+      return res.status(400).json({ ok: false, error: 'Missing company details.' });
+    }
+
+    if (!sales_terms) {
+      return res.status(400).json({ ok: false, error: 'Sales terms must be accepted.' });
+    }
+
+    const qty = clamp(intSafe(extra_plates, 0), 0, 99);
+
+    // race-safe check
+    if (await emailExists(emailKey)) {
+      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
+    }
+
+    await client.query('BEGIN');
+
+    const c = s.draftCompany;
+
+    // Create customer (klantfiche)
+    const custIns = await client.query(
+      `INSERT INTO customers (
+        company_name,
+        vat_country,
+        vat_number,
+        address_line1,
+        address_line2,
+        postal_code,
+        city,
+        country,
+        contact_name,
+        contact_phone,
+        billing_email
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      RETURNING id`,
+      [
+        c.name,
+        c.registeredAddress?.country || null,
+        c.enterpriseNumber || null,
+        c.registeredAddress?.street || null,
+        c.registeredAddress?.box || null,
+        c.registeredAddress?.postalCode || null,
+        c.registeredAddress?.city || null,
+        c.registeredAddress?.country || null,
+        null,
+        null,
+        c.billing?.email || null
+      ]
+    );
+
+    const customerId = custIns.rows[0].id;
+
+    // Create user linked to customer
+    const userIns = await client.query(
+      `INSERT INTO users (email, password_hash, role, is_active, customer_id)
+       VALUES ($1,$2,'customer_admin', true, $3)
+       RETURNING id`,
+      [emailKey, s.passHash, customerId]
+    );
+
+    const userId = userIns.rows[0].id;
+
+    await client.query('COMMIT');
+
+    // end signup session
+    signupTokens.delete(signup_token);
+
+    res.json({
+      ok: true,
+      redirectUrl: '/login',
+      order: {
+        startupFeeExclVat: PRICING.startupFee,
+        extraPlatesQty: qty,
+        extraPlatePriceExclVat: PRICING.extraPlatePrice,
+        totalTodayExclVat: PRICING.startupFee + (qty * PRICING.extraPlatePrice),
+        monthlyExclVat: PRICING.monthlyFee,
+        salesTermsAccepted: true
+      },
+      created: { userId, customerId }
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+
+    console.error('signup step3 error:', err);
+
+    if (String(err?.code) === '23505') {
+      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
+    }
+
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  } finally {
+    client.release();
+  }
 });
 
 // =========================================================
-// API: Login
+// API: Login (DB)
 // =========================================================
-app.post('/api/login', (req, res) => {
-  const { email, password } = req.body || {};
-  const user = usersByEmail.get((email || '').trim().toLowerCase());
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    const emailKey = String(email || '').trim().toLowerCase();
 
-  if (!user || user.passwordPlain !== password || user.status !== 'active') {
-    return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    const { rows } = await pool.query(
+      'SELECT id, email, password_hash, is_active FROM users WHERE email = $1 LIMIT 1',
+      [emailKey]
+    );
+
+    if (!rows.length || rows[0].is_active !== true) {
+      return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    }
+
+    const ok = await bcrypt.compare(String(password || ''), rows[0].password_hash);
+    if (!ok) {
+      return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    }
+
+    const token = uuidv4();
+    sessionsByToken.set(token, { userId: rows[0].id });
+
+    res.json({ ok: true, token, redirectUrl: '/app' });
+  } catch (err) {
+    console.error('login error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
   }
-
-  const token = uuidv4();
-  sessionsByToken.set(token, { email: user.email });
-
-  res.json({ ok: true, token, redirectUrl: '/app' });
 });
 
 // =========================================================
 // API: Current user
 // =========================================================
-app.get('/api/me', (req, res) => {
-  const token = getTokenFromRequest(req);
-  if (!token || !sessionsByToken.has(token)) {
-    return res.status(401).json({ ok: false });
-  }
-
-  const { email } = sessionsByToken.get(token);
-  const user = usersByEmail.get(email);
-
+app.get('/api/me', requireAuth, async (req, res) => {
   res.json({
     ok: true,
     user: {
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      companyId: user.companyId
+      id: req.auth.user.id,
+      email: req.auth.user.email,
+      role: req.auth.user.role,
+      customerId: req.auth.user.customer_id
     }
   });
 });
@@ -423,18 +502,53 @@ app.post('/api/logout', requireAuth, (req, res) => {
 });
 
 // =========================================================
-// API: Company
+// API: Company (customers) from DB
 // =========================================================
-app.get('/api/company', requireAuth, (req, res) => {
-  const company = companiesById.get(req.auth.user.companyId);
-  if (!company) return res.status(404).json({ ok: false });
-  res.json({ ok: true, company });
+app.get('/api/company', requireAuth, async (req, res) => {
+  try {
+    const customerId = req.auth.user.customer_id;
+    if (!customerId) return res.status(404).json({ ok: false });
+
+    const { rows } = await pool.query(
+      `SELECT
+        id,
+        company_name,
+        vat_country,
+        vat_number,
+        address_line1,
+        address_line2,
+        postal_code,
+        city,
+        country,
+        billing_email,
+        created_at
+      FROM customers
+      WHERE id = $1
+      LIMIT 1`,
+      [customerId]
+    );
+
+    if (!rows.length) return res.status(404).json({ ok: false });
+
+    res.json({ ok: true, company: rows[0] });
+  } catch (err) {
+    console.error('company error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
 });
 
 // =========================================================
-// Health
+// Health (DB check)
 // =========================================================
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+app.get('/api/health', async (_, res) => {
+  try {
+    const r = await pool.query('SELECT 1 AS ok');
+    res.json({ ok: true, db: r.rows[0].ok === 1 });
+  } catch (err) {
+    console.error('DB healthcheck failed:', err);
+    res.json({ ok: true, db: false });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`MyPunctoo backend listening on port ${PORT}`);
