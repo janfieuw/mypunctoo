@@ -74,7 +74,7 @@ body {
   display: none; /* mobile-first: hide */
   position: relative;
   overflow: hidden;
-  padding: 0; /* geen padding nodig voor background-image */
+  padding: 0;
 
   background-image:
     linear-gradient(
@@ -83,10 +83,13 @@ body {
     ),
     url("/assets/signup_model.png");
 
-  /* 👇 maakt de plate visueel kleiner + houdt focus op hand/telefoon */
-  background-size: 135%;
-  background-position: 78% center;
+  /* ✅ simpel: foto vult altijd het vlak */
+  background-size: cover;
+  background-position: center;
   background-repeat: no-repeat;
+
+  /* ✅ vult mee met de hoogte van de card */
+  min-height: 100%;
 }
 
 @media (min-width: 980px) {
@@ -95,18 +98,11 @@ body {
   .auth-aside { display: block; }
 }
 
-/* zachte highlight (optioneel maar mooi) */
-.auth-aside::after {
-  content: "";
-  position: absolute;
-  inset: -140px -120px auto auto;
-  width: 420px;
-  height: 420px;
-  background: radial-gradient(circle, rgba(253,197,0,0.18), transparent 70%);
-  transform: rotate(15deg);
-  pointer-events: none;
-}
+/* (verwijderd) gele highlight: maakte de foto “vuil” */
 
+/* =========================
+   Header / branding
+========================= */
 .brand-row {
   display: flex;
   align-items: center;
