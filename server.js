@@ -113,20 +113,31 @@ function isValidWebsite(url) {
   }
 }
 
+function intSafe(n, fallback = 0) {
+  const x = parseInt(String(n || '').replace(/[^\d]/g, ''), 10);
+  return Number.isFinite(x) ? x : fallback;
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
 // =========================================================
-// API: Signup step 1 (HR contact)
+// Pricing (DEMO constants)
+// =========================================================
+const PRICING = {
+  startupFee: 49,
+  monthlyFee: 9,
+  extraPlatePrice: 39
+};
+
+// =========================================================
+// API: Signup step 1 (Account: email + password)
 // =========================================================
 app.post('/api/signup/step1', (req, res) => {
-  const {
-    first_name,
-    last_name,
-    email,
-    password,
-    password_confirm,
-    terms
-  } = req.body || {};
+  const { email, password, password_confirm } = req.body || {};
 
-  if (!first_name || !last_name || !email || !password || !password_confirm) {
+  if (!email || !password || !password_confirm) {
     return res.status(400).json({ ok: false, error: 'Missing required fields.' });
   }
 
@@ -142,10 +153,6 @@ app.post('/api/signup/step1', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
   }
 
-  if (!terms) {
-    return res.status(400).json({ ok: false, error: 'Terms must be accepted.' });
-  }
-
   const key = String(email).trim().toLowerCase();
   if (usersByEmail.has(key)) {
     return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
@@ -153,12 +160,14 @@ app.post('/api/signup/step1', (req, res) => {
 
   usersByEmail.set(key, {
     id: uuidv4(),
-    firstName: toTitleCase(first_name),
-    lastName: toTitleCase(last_name),
+    firstName: '',
+    lastName: '',
     email: key,
     passwordPlain: password, // demo only
     status: 'pending_step2',
-    companyId: null
+    companyId: null,
+    draftCompany: null,
+    draftOrder: null
   });
 
   const signupToken = uuidv4();
@@ -168,7 +177,7 @@ app.post('/api/signup/step1', (req, res) => {
 });
 
 // =========================================================
-// API: Signup step 2 (Company + addresses + optional website)
+// API: Signup step 2 (Company details saved; no activation yet)
 // =========================================================
 app.post('/api/signup/step2', (req, res) => {
   const {
@@ -207,6 +216,10 @@ app.post('/api/signup/step2', (req, res) => {
   const emailKey = String(email || '').trim().toLowerCase();
   if (!user || user.email !== emailKey || user.passwordPlain !== password) {
     return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
+  }
+
+  if (user.status !== 'pending_step2') {
+    return res.status(400).json({ ok: false, error: 'Unexpected signup state.' });
   }
 
   if (
@@ -248,15 +261,13 @@ app.post('/api/signup/step2', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Invalid website URL.' });
   }
 
-  const companyId = uuidv4();
-
   const websiteClean = safeText(website);
   const websiteNormalized = websiteClean
     ? (websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
     : '';
 
-  companiesById.set(companyId, {
-    id: companyId,
+  // Save as draft on user until step 3 confirms order
+  user.draftCompany = {
     name: toTitleCase(company_name),
     enterpriseNumber: normalizeUpper(enterprise_number),
     website: websiteNormalized || null,
@@ -280,25 +291,84 @@ app.post('/api/signup/step2', (req, res) => {
       postalCode: safeText(delivery_postal_code),
       city: toTitleCase(delivery_city),
       country: delCountry
-    } : null,
+    } : null
+  };
+
+  user.status = 'pending_step3';
+
+  res.json({ ok: true });
+});
+
+// =========================================================
+// API: Signup step 3 (Confirm order; activate account)
+// =========================================================
+app.post('/api/signup/step3', (req, res) => {
+  const { signup_token, email, password, extra_plates, sales_terms } = req.body || {};
+
+  if (!signup_token || !signupTokens.has(signup_token)) {
+    return res.status(400).json({ ok: false, error: 'Signup session expired.' });
+  }
+
+  const { email: tokenEmail } = signupTokens.get(signup_token);
+  const user = usersByEmail.get(tokenEmail);
+
+  const emailKey = String(email || '').trim().toLowerCase();
+  if (!user || user.email !== emailKey || user.passwordPlain !== password) {
+    return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
+  }
+
+  if (user.status !== 'pending_step3' || !user.draftCompany) {
+    return res.status(400).json({ ok: false, error: 'Missing company details.' });
+  }
+
+  if (!sales_terms) {
+    return res.status(400).json({ ok: false, error: 'Sales terms must be accepted.' });
+  }
+
+  const qty = clamp(intSafe(extra_plates, 0), 0, 99);
+
+  // Create company
+  const companyId = uuidv4();
+  const company = {
+    id: companyId,
+    ...user.draftCompany,
 
     subscription: {
       status: 'active',
-      plan: 'Monthly – unlimited users – €19.99 / month (excl. VAT)'
+      plan: 'Monthly',
+      priceMonthlyExclVat: PRICING.monthlyFee,
+      startedAt: new Date().toISOString()
+    },
+
+    order: {
+      status: 'confirmed',
+      confirmedAt: new Date().toISOString(),
+      startupFeeExclVat: PRICING.startupFee,
+      extraPlatesQty: qty,
+      extraPlatePriceExclVat: PRICING.extraPlatePrice,
+      totalTodayExclVat: PRICING.startupFee + (qty * PRICING.extraPlatePrice),
+      monthlyExclVat: PRICING.monthlyFee,
+      salesTermsAccepted: true
     },
 
     contact: {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      role: 'HR contact'
+      role: 'Account owner'
     }
-  });
+  };
 
+  companiesById.set(companyId, company);
   employeesByCompanyId.set(companyId, []);
 
+  // Activate user
   user.status = 'active';
   user.companyId = companyId;
+  user.draftCompany = null;
+  user.draftOrder = null;
+
+  // End signup session
   signupTokens.delete(signup_token);
 
   res.json({ ok: true, redirectUrl: '/login' });

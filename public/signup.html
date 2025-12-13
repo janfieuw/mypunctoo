@@ -31,9 +31,11 @@
       <h2 class="auth-title">Set up your MyPunctoo dashboard</h2>
 
       <div class="step-indicator">
-        <div class="step-pill step-pill-1 active"><span>1</span> HR contact</div>
+        <div class="step-pill step-pill-1 active"><span>1</span> Account</div>
         <div class="step-divider"></div>
         <div class="step-pill step-pill-2"><span>2</span> Company details</div>
+        <div class="step-divider"></div>
+        <div class="step-pill step-pill-3"><span>3</span> Confirmation</div>
       </div>
 
       <div id="formError" class="form-error"></div>
@@ -44,18 +46,7 @@
 
         <!-- STEP 1 -->
         <div id="step-1" class="form-step active">
-          <h3 class="form-section-title">Contact person (HR)</h3>
-
-          <div class="field-row">
-            <div class="field">
-              <label>First name *</label>
-              <input id="firstName" required autocomplete="given-name">
-            </div>
-            <div class="field">
-              <label>Last name *</label>
-              <input id="lastName" required autocomplete="family-name">
-            </div>
-          </div>
+          <h3 class="form-section-title">Account</h3>
 
           <div class="field">
             <label>Work e-mail *</label>
@@ -73,9 +64,8 @@
             </div>
           </div>
 
-          <div class="checkbox-row">
-            <input type="checkbox" id="terms" required>
-            <span>I agree to the Terms & Conditions and Privacy Policy</span>
+          <div class="help-text">
+            You’ll confirm the order in the last step.
           </div>
         </div>
 
@@ -124,7 +114,7 @@
             </select>
           </div>
 
-          <!-- ✅ Variant B: prefix-badge + suggested format + soft warning -->
+          <!-- ✅ prefix-badge + suggested format + soft warning -->
           <div class="field">
             <label>Enterprise / EU business number *</label>
 
@@ -247,16 +237,57 @@
           </div>
         </div>
 
+        <!-- STEP 3 -->
+        <div id="step-3" class="form-step">
+          <h3 class="form-section-title">Confirm your order</h3>
+
+          <div class="order-summary">
+            <div class="order-line">
+              <div class="order-label">One-time startup fee</div>
+              <div class="order-price" id="startupFee">€49</div>
+              <div class="order-note">Includes 1 PUNCTOO Plate, shipping & activation</div>
+            </div>
+
+            <div class="order-line">
+              <div class="order-label">Monthly subscription</div>
+              <div class="order-price" id="monthlyFee">€9 / month</div>
+              <div class="order-note">Excl. VAT, starts upon activation</div>
+            </div>
+
+            <div class="order-line order-line-split">
+              <div class="order-label">Extra PUNCTOO Plates (optional)</div>
+
+              <div class="qty">
+                <button type="button" class="qty-btn" id="platesMinus" aria-label="Decrease">−</button>
+                <input id="extraPlates" class="qty-input" value="0" inputmode="numeric" autocomplete="off">
+                <button type="button" class="qty-btn" id="platesPlus" aria-label="Increase">+</button>
+              </div>
+
+              <div class="order-note">€39 / piece</div>
+            </div>
+
+            <div class="order-total">
+              <div class="order-total-label">Total today (excl. VAT)</div>
+              <div class="order-total-price" id="totalToday">€49</div>
+            </div>
+          </div>
+
+          <div class="checkbox-row checkbox-row-strong">
+            <input type="checkbox" id="salesTerms" required>
+            <span>I have read and accept the sales terms & conditions</span>
+          </div>
+        </div>
+
         <!-- NAV -->
         <div class="form-navigation">
           <div class="nav-left">
-            <div class="nav-hint" id="navHint">Step 1 of 2</div>
+            <div class="nav-hint" id="navHint">Step 1 of 3</div>
           </div>
 
           <div class="nav-right">
             <button type="button" id="backBtn" class="btn-secondary" style="display:none;">← Back</button>
             <button type="button" id="nextBtn" class="btn-primary">Next →</button>
-            <button type="button" id="createBtn" class="btn-primary" style="display:none;">Create account</button>
+            <button type="button" id="confirmBtn" class="btn-primary" style="display:none;">Confirm order</button>
           </div>
         </div>
       </form>
@@ -271,22 +302,27 @@
 (function () {
   const step1 = document.getElementById('step-1');
   const step2 = document.getElementById('step-2');
+  const step3 = document.getElementById('step-3');
+
   const nextBtn = document.getElementById('nextBtn');
   const backBtn = document.getElementById('backBtn');
-  const createBtn = document.getElementById('createBtn');
+  const confirmBtn = document.getElementById('confirmBtn');
   const navHint = document.getElementById('navHint');
+
+  const pill1 = document.querySelector('.step-pill-1');
+  const pill2 = document.querySelector('.step-pill-2');
+  const pill3 = document.querySelector('.step-pill-3');
 
   const formError = document.getElementById('formError');
   const formStatus = document.getElementById('formStatus');
   const signupTokenEl = document.getElementById('signupToken');
 
-  const firstNameEl = document.getElementById('firstName');
-  const lastNameEl = document.getElementById('lastName');
+  // Step 1
   const emailEl = document.getElementById('email');
   const passwordEl = document.getElementById('password');
   const passwordConfirmEl = document.getElementById('passwordConfirm');
-  const termsEl = document.getElementById('terms');
 
+  // Step 2
   const companyNameEl = document.getElementById('companyName');
   const enterpriseNumberEl = document.getElementById('enterpriseNumber');
   const websiteEl = document.getElementById('website');
@@ -313,6 +349,18 @@
   const enterpriseHelpEl = document.getElementById('enterpriseHelp');
   const enterpriseWarnEl = document.getElementById('enterpriseWarn');
 
+  // Step 3
+  const platesMinus = document.getElementById('platesMinus');
+  const platesPlus = document.getElementById('platesPlus');
+  const extraPlatesEl = document.getElementById('extraPlates');
+  const salesTermsEl = document.getElementById('salesTerms');
+
+  const totalTodayEl = document.getElementById('totalToday');
+
+  const STARTUP_FEE = 49;
+  const MONTHLY_FEE = 9;
+  const EXTRA_PLATE_PRICE = 39;
+
   function showError(msg) {
     formError.textContent = msg || '';
     formError.classList.toggle('visible', !!msg);
@@ -323,93 +371,59 @@
     formStatus.classList.toggle('visible', !!msg);
   }
 
+  function setStepPills(step) {
+    pill1.classList.toggle('active', step === 1);
+    pill2.classList.toggle('active', step === 2);
+    pill3.classList.toggle('active', step === 3);
+  }
+
   function go(step) {
     step1.classList.toggle('active', step === 1);
     step2.classList.toggle('active', step === 2);
+    step3.classList.toggle('active', step === 3);
 
-    backBtn.style.display = step === 2 ? 'inline-flex' : 'none';
-    nextBtn.style.display = step === 1 ? 'inline-flex' : 'none';
-    createBtn.style.display = step === 2 ? 'inline-flex' : 'none';
+    setStepPills(step);
 
-    navHint.textContent = step === 1 ? 'Step 1 of 2' : 'Step 2 of 2';
+    backBtn.style.display = step === 1 ? 'none' : 'inline-flex';
+    nextBtn.style.display = step === 3 ? 'none' : 'inline-flex';
+    confirmBtn.style.display = step === 3 ? 'inline-flex' : 'none';
+
+    navHint.textContent = step === 1 ? 'Step 1 of 3' : (step === 2 ? 'Step 2 of 3' : 'Step 3 of 3');
 
     showError('');
     showStatus('');
+
+    if (step === 3) updateTotal();
   }
 
-  nextBtn.onclick = async () => {
-    showError('');
-    showStatus('');
-
-    const payload = {
-      first_name: (firstNameEl.value || '').trim(),
-      last_name: (lastNameEl.value || '').trim(),
-      email: (emailEl.value || '').trim(),
-      password: passwordEl.value,
-      password_confirm: passwordConfirmEl.value,
-      terms: !!termsEl.checked
-    };
-
-    if (!payload.first_name || !payload.last_name || !payload.email || !payload.password || !payload.password_confirm) {
-      showError('Please fill in all required fields.');
-      return;
-    }
-
-    showStatus('Creating your HR account...');
-    try {
-      const r = await fetch('/api/signup/step1', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await r.json();
-      if (!data.ok) {
-        showStatus('');
-        showError(data.error || 'Signup failed.');
-        return;
-      }
-
-      signupTokenEl.value = data.signupToken;
-      billingEmailEl.value = payload.email;
-
-      showStatus('');
-      go(2);
-    } catch (e) {
-      showStatus('');
-      showError('Network error.');
-    }
-  };
-
-  backBtn.onclick = () => go(1);
-
-  // =========================
-  // AUTO UPPERCASE (except email + passwords)
-  // =========================
-  function shouldUppercase(el) {
-    if (!el) return false;
-    if (el.tagName === 'SELECT') return true;
-    if (el.tagName === 'TEXTAREA') return true;
-    if (el.tagName !== 'INPUT') return false;
-
-    const t = (el.type || 'text').toLowerCase();
-    if (t === 'email' || t === 'password') return false;
-    return true;
+  function toIntSafe(v, fallback = 0) {
+    const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10);
+    return Number.isFinite(n) ? n : fallback;
   }
 
-  document.addEventListener('input', (e) => {
-    const el = e.target;
-    if (!shouldUppercase(el)) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    el.value = (el.value || '').toUpperCase();
-    try { el.setSelectionRange(start, end); } catch (_) {}
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function updateTotal() {
+    const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
+    extraPlatesEl.value = String(qty);
+    const total = STARTUP_FEE + (qty * EXTRA_PLATE_PRICE);
+    totalTodayEl.textContent = `€${total}`;
+  }
+
+  platesMinus.addEventListener('click', () => {
+    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) - 1, 0, 99));
+    updateTotal();
   });
 
-  [emailEl, billingEmailEl].forEach(el => {
-    el.addEventListener('blur', () => {
-      el.value = (el.value || '').trim().toLowerCase();
-    });
+  platesPlus.addEventListener('click', () => {
+    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) + 1, 0, 99));
+    updateTotal();
   });
+
+  extraPlatesEl.addEventListener('input', updateTotal);
+  extraPlatesEl.addEventListener('blur', updateTotal);
 
   // =========================
   // ENTERPRISE NUMBER (Variant B)
@@ -526,55 +540,181 @@
     }
   });
 
-  // Create account (step 2)
-  createBtn.onclick = async () => {
+  // =========================
+  // AUTO UPPERCASE (except email + passwords)
+  // =========================
+  function shouldUppercase(el) {
+    if (!el) return false;
+    if (el.tagName === 'SELECT') return true;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName !== 'INPUT') return false;
+
+    const t = (el.type || 'text').toLowerCase();
+    if (t === 'email' || t === 'password') return false;
+    return true;
+  }
+
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!shouldUppercase(el)) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    el.value = (el.value || '').toUpperCase();
+    try { el.setSelectionRange(start, end); } catch (_) {}
+  });
+
+  [emailEl, billingEmailEl].forEach(el => {
+    el.addEventListener('blur', () => {
+      el.value = (el.value || '').trim().toLowerCase();
+    });
+  });
+
+  // =========================
+  // NAV LOGIC
+  // =========================
+  let currentStep = 1;
+
+  backBtn.onclick = () => {
+    if (currentStep === 2) { currentStep = 1; go(1); return; }
+    if (currentStep === 3) { currentStep = 2; go(2); return; }
+  };
+
+  nextBtn.onclick = async () => {
     showError('');
     showStatus('');
 
-    const deliveryIsDifferent = !!deliveryCheckbox.checked;
+    // STEP 1 -> create account (no order yet)
+    if (currentStep === 1) {
+      const payload = {
+        email: (emailEl.value || '').trim(),
+        password: passwordEl.value,
+        password_confirm: passwordConfirmEl.value
+      };
 
-    const prefix = vatPrefixFor(regCountryEl.value);
-    const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
-    const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
-    enterpriseNumberEl.value = finalEnterprise;
+      if (!payload.email || !payload.password || !payload.password_confirm) {
+        showError('Please fill in all required fields.');
+        return;
+      }
+
+      showStatus('Creating your account...');
+      try {
+        const r = await fetch('/api/signup/step1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          showStatus('');
+          showError(data.error || 'Signup failed.');
+          return;
+        }
+
+        signupTokenEl.value = data.signupToken;
+        billingEmailEl.value = (payload.email || '').trim().toLowerCase();
+
+        showStatus('');
+        currentStep = 2;
+        go(2);
+      } catch (e) {
+        showStatus('');
+        showError('Network error.');
+      }
+      return;
+    }
+
+    // STEP 2 -> save company details, go to checkout confirmation
+    if (currentStep === 2) {
+      const deliveryIsDifferent = !!deliveryCheckbox.checked;
+
+      const prefix = vatPrefixFor(regCountryEl.value);
+      const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
+      const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
+      enterpriseNumberEl.value = finalEnterprise;
+
+      const payload = {
+        signup_token: signupTokenEl.value,
+        email: (emailEl.value || '').trim().toLowerCase(),
+        password: passwordEl.value,
+
+        company_name: (companyNameEl.value || '').trim(),
+        enterprise_number: (enterpriseNumberEl.value || '').trim(),
+        website: (websiteEl.value || '').trim(),
+
+        registered_street: (regStreetEl.value || '').trim(),
+        registered_box: (regBoxEl.value || '').trim(),
+        registered_postal_code: (regPostalEl.value || '').trim(),
+        registered_city: (regCityEl.value || '').trim(),
+        registered_country_code: regCountryEl.value,
+
+        billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
+        billing_reference: (billingReferenceEl.value || '').trim(),
+
+        delivery_is_different: deliveryIsDifferent,
+        delivery_street: (delStreetEl.value || '').trim(),
+        delivery_box: (delBoxEl.value || '').trim(),
+        delivery_postal_code: (delPostalEl.value || '').trim(),
+        delivery_city: (delCityEl.value || '').trim(),
+        delivery_country_code: delCountryEl.value
+      };
+
+      if (!deliveryIsDifferent) {
+        payload.delivery_street = '';
+        payload.delivery_box = '';
+        payload.delivery_postal_code = '';
+        payload.delivery_city = '';
+        payload.delivery_country_code = '';
+      }
+
+      showStatus('Saving your company details...');
+      try {
+        const r = await fetch('/api/signup/step2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          showStatus('');
+          showError(data.error || 'Could not save company details.');
+          return;
+        }
+
+        showStatus('');
+        currentStep = 3;
+        go(3);
+      } catch (e) {
+        showStatus('');
+        showError('Network error.');
+      }
+    }
+  };
+
+  // STEP 3 -> confirm order & activate
+  confirmBtn.onclick = async () => {
+    showError('');
+    showStatus('');
+
+    const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
+    extraPlatesEl.value = String(qty);
+    updateTotal();
+
+    if (!salesTermsEl.checked) {
+      showError('Please accept the sales terms & conditions to continue.');
+      return;
+    }
 
     const payload = {
       signup_token: signupTokenEl.value,
       email: (emailEl.value || '').trim().toLowerCase(),
       password: passwordEl.value,
-
-      company_name: (companyNameEl.value || '').trim(),
-      enterprise_number: (enterpriseNumberEl.value || '').trim(),
-      website: (websiteEl.value || '').trim(),
-
-      registered_street: (regStreetEl.value || '').trim(),
-      registered_box: (regBoxEl.value || '').trim(),
-      registered_postal_code: (regPostalEl.value || '').trim(),
-      registered_city: (regCityEl.value || '').trim(),
-      registered_country_code: regCountryEl.value,
-
-      billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-      billing_reference: (billingReferenceEl.value || '').trim(),
-
-      delivery_is_different: deliveryIsDifferent,
-      delivery_street: (delStreetEl.value || '').trim(),
-      delivery_box: (delBoxEl.value || '').trim(),
-      delivery_postal_code: (delPostalEl.value || '').trim(),
-      delivery_city: (delCityEl.value || '').trim(),
-      delivery_country_code: delCountryEl.value
+      extra_plates: qty,
+      sales_terms: true
     };
 
-    if (!deliveryIsDifferent) {
-      payload.delivery_street = '';
-      payload.delivery_box = '';
-      payload.delivery_postal_code = '';
-      payload.delivery_city = '';
-      payload.delivery_country_code = '';
-    }
-
-    showStatus('Creating your company workspace...');
+    showStatus('Confirming your order...');
     try {
-      const r = await fetch('/api/signup/step2', {
+      const r = await fetch('/api/signup/step3', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -582,9 +722,10 @@
       const data = await r.json();
       if (!data.ok) {
         showStatus('');
-        showError(data.error || 'Signup failed.');
+        showError(data.error || 'Order confirmation failed.');
         return;
       }
+
       window.location.href = data.redirectUrl || '/login';
     } catch (e) {
       showStatus('');
@@ -592,6 +733,9 @@
     }
   };
 
+  // Init
+  go(1);
+  updateTotal();
 })();
 </script>
 </body>
