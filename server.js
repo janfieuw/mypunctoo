@@ -11,9 +11,6 @@ const rootDir = __dirname;
 // =========================================================
 app.use(express.json());
 
-/* =========================================================
-   HTML requests afvangen VOOR express.static
-========================================================= */
 app.use((req, res, next) => {
   if (!req.path.endsWith('.html')) return next();
 
@@ -34,15 +31,9 @@ app.use(express.static(path.join(rootDir, 'public')));
 // Public routes
 // =========================================================
 app.get('/', (_, res) => res.redirect('/login'));
-app.get('/signup', (_, res) =>
-  res.sendFile(path.join(rootDir, 'public', 'signup.html'))
-);
-app.get('/login', (_, res) =>
-  res.sendFile(path.join(rootDir, 'public', 'login.html'))
-);
-app.get('/app', (_, res) =>
-  res.sendFile(path.join(rootDir, 'public', 'index.html'))
-);
+app.get('/signup', (_, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
+app.get('/login', (_, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
+app.get('/app', (_, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
 
 // =========================================================
 // In-memory storage (DEMO)
@@ -92,6 +83,36 @@ function requireAuth(req, res, next) {
   next();
 }
 
+const LOWER_WORDS = new Set(['de','der','den','van','von','da','di','la','le','du','des','of','and']);
+function toTitleCase(str) {
+  const s = safeText(str);
+  if (!s) return '';
+  return s
+    .toLowerCase()
+    .split(/(\s+|-|')/g)
+    .map((part, idx) => {
+      if (part.match(/^\s+|-|'$/)) return part;
+      if (idx !== 0 && LOWER_WORDS.has(part)) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join('');
+}
+
+function normalizeUpper(str) {
+  return safeText(str).toUpperCase();
+}
+
+function isValidWebsite(url) {
+  const v = safeText(url);
+  if (!v) return true; // optional
+  try {
+    const u = new URL(v.startsWith('http') ? v : `https://${v}`);
+    return ['http:', 'https:'].includes(u.protocol);
+  } catch {
+    return false;
+  }
+}
+
 // =========================================================
 // API: Signup step 1 (HR contact)
 // =========================================================
@@ -113,7 +134,7 @@ app.post('/api/signup/step1', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Invalid e-mail address.' });
   }
 
-  if (password.length < 8) {
+  if (String(password).length < 8) {
     return res.status(400).json({ ok: false, error: 'Password too short.' });
   }
 
@@ -125,15 +146,15 @@ app.post('/api/signup/step1', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Terms must be accepted.' });
   }
 
-  const key = email.toLowerCase();
+  const key = String(email).trim().toLowerCase();
   if (usersByEmail.has(key)) {
     return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
   }
 
   usersByEmail.set(key, {
     id: uuidv4(),
-    firstName: safeText(first_name),
-    lastName: safeText(last_name),
+    firstName: toTitleCase(first_name),
+    lastName: toTitleCase(last_name),
     email: key,
     passwordPlain: password, // demo only
     status: 'pending_step2',
@@ -147,7 +168,7 @@ app.post('/api/signup/step1', (req, res) => {
 });
 
 // =========================================================
-// API: Signup step 2 (Company + addresses)
+// API: Signup step 2 (Company + addresses + optional website)
 // =========================================================
 app.post('/api/signup/step2', (req, res) => {
   const {
@@ -157,6 +178,7 @@ app.post('/api/signup/step2', (req, res) => {
 
     company_name,
     enterprise_number,
+    website,
 
     registered_street,
     registered_box,
@@ -182,7 +204,8 @@ app.post('/api/signup/step2', (req, res) => {
   const { email: tokenEmail } = signupTokens.get(signup_token);
   const user = usersByEmail.get(tokenEmail);
 
-  if (!user || user.email !== email.toLowerCase() || user.passwordPlain !== password) {
+  const emailKey = String(email || '').trim().toLowerCase();
+  if (!user || user.email !== emailKey || user.passwordPlain !== password) {
     return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
   }
 
@@ -198,51 +221,65 @@ app.post('/api/signup/step2', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Missing company fields.' });
   }
 
-  if (!EU_COUNTRIES.has(registered_country_code)) {
+  const regCountry = String(registered_country_code).toUpperCase();
+  if (!EU_COUNTRIES.has(regCountry)) {
     return res.status(400).json({ ok: false, error: 'Invalid country code.' });
   }
 
-  if (delivery_is_different) {
-    if (
-      !delivery_street ||
-      !delivery_postal_code ||
-      !delivery_city ||
-      !delivery_country_code
-    ) {
+  const billingEmailKey = String(billing_email).trim().toLowerCase();
+  if (!isValidEmail(billingEmailKey)) {
+    return res.status(400).json({ ok: false, error: 'Invalid billing e-mail address.' });
+  }
+
+  const deliveryIsDifferent = !!delivery_is_different;
+
+  let delCountry = '';
+  if (deliveryIsDifferent) {
+    if (!delivery_street || !delivery_postal_code || !delivery_city || !delivery_country_code) {
       return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
     }
-
-    if (!EU_COUNTRIES.has(delivery_country_code)) {
+    delCountry = String(delivery_country_code).toUpperCase();
+    if (!EU_COUNTRIES.has(delCountry)) {
       return res.status(400).json({ ok: false, error: 'Invalid delivery country code.' });
     }
   }
 
+  if (!isValidWebsite(website)) {
+    return res.status(400).json({ ok: false, error: 'Invalid website URL.' });
+  }
+
   const companyId = uuidv4();
+
+  const websiteClean = safeText(website);
+  const websiteNormalized = websiteClean
+    ? (websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
+    : '';
 
   companiesById.set(companyId, {
     id: companyId,
-    name: safeText(company_name),
-    enterpriseNumber: safeText(enterprise_number),
+    name: toTitleCase(company_name),
+    enterpriseNumber: normalizeUpper(enterprise_number),
+    website: websiteNormalized || null,
 
     registeredAddress: {
-      street: safeText(registered_street),
-      box: safeText(registered_box),
+      street: toTitleCase(registered_street),
+      box: normalizeUpper(registered_box),
       postalCode: safeText(registered_postal_code),
-      city: safeText(registered_city),
-      country: registered_country_code
+      city: toTitleCase(registered_city),
+      country: regCountry
     },
 
     billing: {
-      email: safeText(billing_email),
-      reference: safeText(billing_reference)
+      email: billingEmailKey,
+      reference: toTitleCase(billing_reference)
     },
 
-    deliveryAddress: delivery_is_different ? {
-      street: safeText(delivery_street),
-      box: safeText(delivery_box),
+    deliveryAddress: deliveryIsDifferent ? {
+      street: toTitleCase(delivery_street),
+      box: normalizeUpper(delivery_box),
       postalCode: safeText(delivery_postal_code),
-      city: safeText(delivery_city),
-      country: delivery_country_code
+      city: toTitleCase(delivery_city),
+      country: delCountry
     } : null,
 
     subscription: {
@@ -272,7 +309,7 @@ app.post('/api/signup/step2', (req, res) => {
 // =========================================================
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body || {};
-  const user = usersByEmail.get((email || '').toLowerCase());
+  const user = usersByEmail.get((email || '').trim().toLowerCase());
 
   if (!user || user.passwordPlain !== password || user.status !== 'active') {
     return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
