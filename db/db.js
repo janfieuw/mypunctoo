@@ -1,16 +1,20 @@
-// db/db.js
 const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-  console.warn('⚠️ DATABASE_URL is missing. Set it in Railway Variables.');
-}
+console.log('DB ENV CHECK:', {
+  PGHOST: process.env.PGHOST,
+  PGPORT: process.env.PGPORT,
+  PGUSER: process.env.PGUSER,
+  PGDATABASE: process.env.PGDATABASE,
+  HAS_PASSWORD: !!process.env.PGPASSWORD
+});
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Railway Postgres vereist meestal SSL
-  ssl: process.env.DATABASE_SSL === 'false'
-    ? false
-    : { rejectUnauthorized: false }
+  host: process.env.PGHOST,
+  port: Number(process.env.PGPORT),
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE,
+  ssl: { rejectUnauthorized: false }
 });
 
 module.exports = { pool };
