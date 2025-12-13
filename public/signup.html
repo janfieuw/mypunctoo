@@ -89,12 +89,20 @@
             <input id="companyName" required autocomplete="organization">
           </div>
 
+          <!-- ✅ Variant B: prefix-badge + suggested format + soft warning -->
           <div class="field">
             <label>Enterprise / EU business number *</label>
-            <input id="enterpriseNumber" required>
-            <div class="help-text">
-              Belgian companies: ondernemingsnummer. EU companies: business/VAT number.
+
+            <div class="prefix-input">
+              <span class="prefix-badge" id="enterprisePrefix">—</span>
+              <input id="enterpriseNumber" required placeholder="Select country first">
             </div>
+
+            <div class="help-text" id="enterpriseHelp">
+              Select a country to see the suggested format.
+            </div>
+
+            <div class="soft-warning" id="enterpriseWarn"></div>
           </div>
 
           <div class="field">
@@ -174,7 +182,7 @@
 
           <div class="checkbox-row">
             <input type="checkbox" id="deliveryDifferent">
-            <span>Delivery address is different from registered address</span>
+            <span>Delivery address for MyPunctoo plate is different from registered address</span>
           </div>
 
           <div id="deliveryBlock" style="display:none;">
@@ -300,6 +308,11 @@
   const delCityEl = document.getElementById('delCity');
   const delCountryEl = document.getElementById('delCountry');
 
+  // Variant B UI elements
+  const enterprisePrefixEl = document.getElementById('enterprisePrefix');
+  const enterpriseHelpEl = document.getElementById('enterpriseHelp');
+  const enterpriseWarnEl = document.getElementById('enterpriseWarn');
+
   function showError(msg) {
     formError.textContent = msg || '';
     formError.classList.toggle('visible', !!msg);
@@ -329,9 +342,9 @@
     showStatus('');
 
     const payload = {
-      first_name: firstNameEl.value.trim(),
-      last_name: lastNameEl.value.trim(),
-      email: emailEl.value.trim(),
+      first_name: (firstNameEl.value || '').trim(),
+      last_name: (lastNameEl.value || '').trim(),
+      email: (emailEl.value || '').trim(),
       password: passwordEl.value,
       password_confirm: passwordConfirmEl.value,
       terms: !!termsEl.checked
@@ -369,62 +382,154 @@
 
   backBtn.onclick = () => go(1);
 
-  // -------- Auto capitalization (except e-mail + passwords) --------
-  const LOWER_WORDS = new Set(['de','der','den','van','von','da','di','la','le','du','des','of','and']);
-  function toTitleCase(str) {
-    const s = (str || '').trim();
-    if (!s) return '';
-    return s
-      .toLowerCase()
-      .split(/(\s+|-|')/g)
-      .map((part, idx) => {
-        if (part.match(/^\s+|-|'$/)) return part;
-        if (idx !== 0 && LOWER_WORDS.has(part)) return part;
-        return part.charAt(0).toUpperCase() + part.slice(1);
-      })
-      .join('');
+  // =========================
+  // 1) AUTO UPPERCASE (except email + passwords)
+  // =========================
+  function shouldUppercase(el) {
+    if (!el) return false;
+    if (el.tagName === 'SELECT') return true;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName !== 'INPUT') return false;
+
+    const t = (el.type || 'text').toLowerCase();
+    if (t === 'email' || t === 'password') return false;
+    return true;
   }
 
-  function onBlurTitleCase(el) {
-    el.addEventListener('blur', () => {
-      el.value = toTitleCase(el.value);
-    });
-  }
-
-  [
-    firstNameEl, lastNameEl,
-    companyNameEl,
-    regStreetEl, regCityEl,
-    billingReferenceEl,
-    delStreetEl, delCityEl
-  ].forEach(onBlurTitleCase);
-
-  function onBlurUpper(el) {
-    el.addEventListener('blur', () => {
-      el.value = (el.value || '').trim().toUpperCase();
-    });
-  }
-  [regBoxEl, delBoxEl].forEach(onBlurUpper);
-  onBlurUpper(enterpriseNumberEl);
-
-  websiteEl.addEventListener('blur', () => {
-    websiteEl.value = (websiteEl.value || '').trim();
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!shouldUppercase(el)) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    el.value = (el.value || '').toUpperCase();
+    // caret netjes houden (voor inputs die dit ondersteunen)
+    try { el.setSelectionRange(start, end); } catch (_) {}
   });
 
+  // E-mails: altijd netjes trimmen + lowercase bij blur (consistent)
   [emailEl, billingEmailEl].forEach(el => {
     el.addEventListener('blur', () => {
-      el.value = (el.value || '').trim();
+      el.value = (el.value || '').trim().toLowerCase();
     });
   });
 
-  // Delivery toggle
+  // =========================
+  // 2) ENTERPRISE NUMBER (Variant B)
+  // =========================
+  function vatPrefixFor(countryCode) {
+    if (!countryCode) return '';
+    // EU VAT prefix uitzondering: Greece uses EL
+    if (countryCode === 'GR') return 'EL';
+    return countryCode;
+  }
+
+  const FORMAT_BY_PREFIX = {
+    BE: { example: 'BE0XXXXXXXXX', soft: /^BE0\d{9}$/ },
+    NL: { example: 'NL123456789B01', soft: /^NL\d{9}B\d{2}$/ },
+    DE: { example: 'DE123456789', soft: /^DE\d{9}$/ },
+    FR: { example: 'FRXX123456789', soft: /^FR[A-Z0-9]{2}\d{9}$/ },
+    LU: { example: 'LU12345678', soft: /^LU\d{8}$/ },
+    IT: { example: 'IT12345678901', soft: /^IT\d{11}$/ },
+    ES: { example: 'ESX1234567X', soft: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/ },
+    PT: { example: 'PT123456789', soft: /^PT\d{9}$/ },
+    AT: { example: 'ATU12345678', soft: /^ATU\d{8}$/ },
+    IE: { example: 'IE1234567X', soft: /^IE[A-Z0-9]{8,9}$/ },
+    PL: { example: 'PL1234567890', soft: /^PL\d{10}$/ },
+    SE: { example: 'SE123456789012', soft: /^SE\d{12}$/ },
+    DK: { example: 'DK12345678', soft: /^DK\d{8}$/ },
+    FI: { example: 'FI12345678', soft: /^FI\d{8}$/ },
+    EL: { example: 'EL123456789', soft: /^EL\d{9}$/ },
+    CY: { example: 'CY12345678X', soft: /^CY\d{8}[A-Z]$/ }
+  };
+
+  function normalizeEnterpriseValue(raw) {
+    return (raw || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[\s.\-\/]/g, '');
+  }
+
+  function setEnterpriseUI() {
+    const cc = regCountryEl.value || '';
+    const prefix = vatPrefixFor(cc);
+
+    enterprisePrefixEl.textContent = prefix || '—';
+
+    if (!cc) {
+      enterpriseNumberEl.placeholder = 'Select country first';
+      enterpriseHelpEl.textContent = 'Select a country to see the suggested format.';
+      enterpriseWarnEl.textContent = '';
+      enterpriseWarnEl.style.display = 'none';
+      return;
+    }
+
+    const fmt = FORMAT_BY_PREFIX[prefix];
+    const example = fmt?.example ? `Example: ${fmt.example}` : `Example: ${prefix}…`;
+    enterpriseNumberEl.placeholder = example;
+
+    enterpriseHelpEl.textContent =
+      (cc === 'BE')
+        ? 'Belgium: use your ondernemingsnummer (BE0xxxxxxxxx).'
+        : 'Other EU countries: use your VAT/business number as used on invoices.';
+
+    validateEnterpriseSoft();
+  }
+
+  function validateEnterpriseSoft() {
+    const cc = regCountryEl.value || '';
+    const prefix = vatPrefixFor(cc);
+    const fmt = FORMAT_BY_PREFIX[prefix];
+
+    const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
+    if (!norm) {
+      enterpriseWarnEl.textContent = '';
+      enterpriseWarnEl.style.display = 'none';
+      return;
+    }
+
+    const withPrefix = norm.startsWith(prefix) ? norm : (prefix + norm);
+    const looksOk = fmt?.soft ? fmt.soft.test(withPrefix) : true;
+
+    if (!looksOk) {
+      enterpriseWarnEl.textContent =
+        'This number looks unusual for the selected country. Please double-check (we won’t block you).';
+      enterpriseWarnEl.style.display = 'block';
+    } else {
+      enterpriseWarnEl.textContent = '';
+      enterpriseWarnEl.style.display = 'none';
+    }
+  }
+
+  regCountryEl.addEventListener('change', () => {
+    setEnterpriseUI();
+
+    // Als delivery block open staat, en delivery country nog leeg is: kopieer country
+    if (deliveryCheckbox.checked && !delCountryEl.value) {
+      delCountryEl.value = regCountryEl.value || '';
+    }
+  });
+
+  enterpriseNumberEl.addEventListener('input', validateEnterpriseSoft);
+  enterpriseNumberEl.addEventListener('blur', validateEnterpriseSoft);
+
+  setEnterpriseUI();
+
+  // =========================
+  // 3) DELIVERY TOGGLE: auto-copy country
+  // =========================
   deliveryCheckbox.addEventListener('change', () => {
     const on = deliveryCheckbox.checked;
     deliveryBlock.style.display = on ? 'block' : 'none';
+
     deliveryBlock.querySelectorAll('input,select').forEach(el => {
       on ? el.setAttribute('required', 'required') : el.removeAttribute('required');
       if (!on) el.value = '';
     });
+
+    if (on) {
+      // Default delivery country = registered country
+      delCountryEl.value = regCountryEl.value || '';
+    }
   });
 
   // Create account (step 2)
@@ -434,29 +539,35 @@
 
     const deliveryIsDifferent = !!deliveryCheckbox.checked;
 
+    // Ensure enterprise number includes prefix
+    const prefix = vatPrefixFor(regCountryEl.value);
+    const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
+    const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
+    enterpriseNumberEl.value = finalEnterprise;
+
     const payload = {
       signup_token: signupTokenEl.value,
       email: (emailEl.value || '').trim().toLowerCase(),
       password: passwordEl.value,
 
-      company_name: companyNameEl.value.trim(),
-      enterprise_number: enterpriseNumberEl.value.trim(),
+      company_name: (companyNameEl.value || '').trim(),
+      enterprise_number: (enterpriseNumberEl.value || '').trim(),
       website: (websiteEl.value || '').trim(),
 
-      registered_street: regStreetEl.value.trim(),
-      registered_box: regBoxEl.value.trim(),
-      registered_postal_code: regPostalEl.value.trim(),
-      registered_city: regCityEl.value.trim(),
+      registered_street: (regStreetEl.value || '').trim(),
+      registered_box: (regBoxEl.value || '').trim(),
+      registered_postal_code: (regPostalEl.value || '').trim(),
+      registered_city: (regCityEl.value || '').trim(),
       registered_country_code: regCountryEl.value,
 
       billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-      billing_reference: billingReferenceEl.value.trim(),
+      billing_reference: (billingReferenceEl.value || '').trim(),
 
       delivery_is_different: deliveryIsDifferent,
-      delivery_street: delStreetEl.value.trim(),
-      delivery_box: delBoxEl.value.trim(),
-      delivery_postal_code: delPostalEl.value.trim(),
-      delivery_city: delCityEl.value.trim(),
+      delivery_street: (delStreetEl.value || '').trim(),
+      delivery_box: (delBoxEl.value || '').trim(),
+      delivery_postal_code: (delPostalEl.value || '').trim(),
+      delivery_city: (delCityEl.value || '').trim(),
       delivery_country_code: delCountryEl.value
     };
 
