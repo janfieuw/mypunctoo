@@ -1,0 +1,179 @@
+/* public/css/login.css */
+
+:root{
+  --bg1:#0f172a;
+  --bg2:#020617;
+
+  --panel:#ffffff;
+  --panelMuted:#f8fafc;
+
+  --text:#0f172a;
+  --muted:#64748b;
+
+  --border:#dbe4f0;
+
+  --accent:#FDC500;
+  --blue:#1d4ed8;
+
+  --radius:22px;
+  --radiusPill:999px;
+
+  --shadow:0 30px 70px rgba(2,6,23,.35);
+
+  --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+
+body{
+  margin:0;
+  color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+  background: radial-gradient(circle at top left, var(--bg1), var(--bg2));
+}
+
+.auth-wrap{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+
+.login-card{
+  width:min(520px, 100%);
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+
+.login-inner{
+  background:var(--panel);
+  padding:26px 22px;
+}
+
+@media (min-width: 640px){
+  .login-inner{ padding:34px 36px; }
+}
+
+/* Brand row (zelfde look als signup, maar zonder auth.css) */
+.brand-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.brand{
+  display:inline-flex;
+  align-items:center;
+  text-decoration:none;
+  color:inherit;
+}
+
+.brand-logo{
+  height:38px;
+  width:auto;
+  display:block;
+}
+
+.login-title{
+  font-family:var(--mono);
+  font-size:1.35rem;
+  letter-spacing:.2px;
+  margin:10px 0 6px;
+}
+
+.login-subtitle{
+  margin:0 0 18px;
+  color:var(--muted);
+  font-size:.9rem;
+  line-height:1.4;
+}
+
+/* Fields */
+.field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:14px;
+}
+
+label{
+  font-size:.82rem;
+  font-weight:700;
+  color:var(--text);
+  font-family:var(--mono);
+}
+
+input{
+  width:100%;
+  border-radius:14px;
+  border:1px solid #cbd5e1;
+  padding:11px 12px;
+  font-size:16px;
+  outline:none;
+  background:var(--panelMuted);
+  font-family:var(--mono);
+  color:var(--text);
+}
+
+input:focus{
+  border-color:rgba(29,78,216,0.6);
+  box-shadow:0 0 0 4px rgba(29,78,216,0.12);
+  background:#fff;
+}
+
+/* Button */
+.btn-primary{
+  width:100%;
+  border:1px solid #111827;
+  background:#111827;
+  color:#f8fafc;
+  border-radius:var(--radiusPill);
+  padding:12px 16px;
+  font-weight:800;
+  font-family:var(--mono);
+  cursor:pointer;
+  transition:140ms ease;
+  min-height:44px;
+  opacity:.92;
+}
+
+.btn-primary:hover{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#111827;
+  opacity:1;
+}
+
+/* Status text */
+.status{
+  margin-top:10px;
+  font-family:var(--mono);
+  font-size:.82rem;
+  color:var(--muted);
+  min-height:18px;
+}
+
+/* Footer link */
+.footer-link{
+  margin-top:14px;
+  font-size:.85rem;
+  color:#475569;
+  font-family:var(--mono);
+}
+
+.footer-link a{
+  color:var(--blue);
+  font-weight:700;
+  text-decoration:none;
+}
+
+.footer-link a:hover{
+  text-decoration:underline;
+}

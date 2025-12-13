@@ -6,39 +6,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/login.css">
 </head>
 
 <body>
   <div class="auth-wrap">
     <section class="login-card">
-      <div class="brand-row" style="margin-bottom: 10px;">
-        <a href="/" class="brand">
-          <img src="/assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
-        </a>
-      </div>
+      <div class="login-inner">
 
-      <h1 class="login-title">Log in to MyPunctoo</h1>
-      <p class="login-subtitle">Back-office toegang voor Punctoo beheerders.</p>
-
-      <form id="loginForm" novalidate>
-        <div class="field">
-          <label for="email">E-mail</label>
-          <input id="email" name="email" type="email" autocomplete="email" required>
+        <div class="brand-row">
+          <a href="/" class="brand">
+            <img src="/assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
+          </a>
         </div>
 
-        <div class="field">
-          <label for="password">Password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <h1 class="login-title">Log in to MyPunctoo</h1>
+        <p class="login-subtitle">Back-office toegang voor Punctoo beheerders.</p>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input id="email" name="email" type="email" autocomplete="email" required>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+          </div>
+
+          <button type="submit" class="btn-primary" id="loginButton">Log in</button>
+          <div id="status" class="status"></div>
+        </form>
+
+        <div class="footer-link">
+          Nog geen account?
+          <a href="/signup">Maak een MyPunctoo account</a>
         </div>
 
-        <button type="submit" class="btn-primary" id="loginButton">Log in</button>
-        <div id="status" class="status"></div>
-      </form>
-
-      <div class="footer-link">
-        Nog geen account?
-        <a href="/signup">Maak een MyPunctoo account</a>
       </div>
     </section>
   </div>
