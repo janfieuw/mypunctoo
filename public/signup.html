@@ -15,6 +15,7 @@
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
+
     <div class="auth-main">
 
       <div class="brand-row">
@@ -27,10 +28,7 @@
         </div>
       </div>
 
-      <h2 class="auth-title">Create your MyPunctoo workspace</h2>
-      <p class="auth-subtitle">
-        Two short steps to connect your company to a compliant digital time tracking system.
-      </p>
+      <h2 class="auth-title">Set up your MyPunctoo dashboard</h2>
 
       <div class="step-indicator">
         <div class="step-pill step-pill-1 active"><span>1</span> HR contact</div>
@@ -132,13 +130,33 @@
             <label>Country *</label>
             <select id="regCountry" required autocomplete="country">
               <option value="">Select country</option>
+              <option value="AT">Austria</option>
               <option value="BE">Belgium</option>
-              <option value="NL">Netherlands</option>
+              <option value="BG">Bulgaria</option>
+              <option value="HR">Croatia</option>
+              <option value="CY">Cyprus</option>
+              <option value="CZ">Czechia</option>
+              <option value="DK">Denmark</option>
+              <option value="EE">Estonia</option>
+              <option value="FI">Finland</option>
               <option value="FR">France</option>
               <option value="DE">Germany</option>
-              <option value="LU">Luxembourg</option>
-              <option value="ES">Spain</option>
+              <option value="GR">Greece</option>
+              <option value="HU">Hungary</option>
+              <option value="IE">Ireland</option>
               <option value="IT">Italy</option>
+              <option value="LV">Latvia</option>
+              <option value="LT">Lithuania</option>
+              <option value="LU">Luxembourg</option>
+              <option value="MT">Malta</option>
+              <option value="NL">Netherlands</option>
+              <option value="PL">Poland</option>
+              <option value="PT">Portugal</option>
+              <option value="RO">Romania</option>
+              <option value="SK">Slovakia</option>
+              <option value="SI">Slovenia</option>
+              <option value="ES">Spain</option>
+              <option value="SE">Sweden</option>
             </select>
           </div>
 
@@ -187,13 +205,33 @@
               <label>Country *</label>
               <select id="delCountry">
                 <option value="">Select country</option>
+                <option value="AT">Austria</option>
                 <option value="BE">Belgium</option>
-                <option value="NL">Netherlands</option>
+                <option value="BG">Bulgaria</option>
+                <option value="HR">Croatia</option>
+                <option value="CY">Cyprus</option>
+                <option value="CZ">Czechia</option>
+                <option value="DK">Denmark</option>
+                <option value="EE">Estonia</option>
+                <option value="FI">Finland</option>
                 <option value="FR">France</option>
                 <option value="DE">Germany</option>
-                <option value="LU">Luxembourg</option>
-                <option value="ES">Spain</option>
+                <option value="GR">Greece</option>
+                <option value="HU">Hungary</option>
+                <option value="IE">Ireland</option>
                 <option value="IT">Italy</option>
+                <option value="LV">Latvia</option>
+                <option value="LT">Lithuania</option>
+                <option value="LU">Luxembourg</option>
+                <option value="MT">Malta</option>
+                <option value="NL">Netherlands</option>
+                <option value="PL">Poland</option>
+                <option value="PT">Portugal</option>
+                <option value="RO">Romania</option>
+                <option value="SK">Slovakia</option>
+                <option value="SI">Slovenia</option>
+                <option value="ES">Spain</option>
+                <option value="SE">Sweden</option>
               </select>
             </div>
           </div>
@@ -201,12 +239,22 @@
 
         <!-- NAV -->
         <div class="form-navigation">
-          <button type="button" id="backBtn" style="display:none;">← Back</button>
-          <button type="button" id="nextBtn">Next →</button>
-          <button type="button" id="createBtn" style="display:none;">Create account</button>
+          <div class="nav-left">
+            <div class="nav-hint" id="navHint">Step 1 of 2</div>
+          </div>
+
+          <div class="nav-right">
+            <button type="button" id="backBtn" class="btn-secondary" style="display:none;">← Back</button>
+            <button type="button" id="nextBtn" class="btn-primary">Next →</button>
+            <button type="button" id="createBtn" class="btn-primary" style="display:none;">Create account</button>
+          </div>
         </div>
       </form>
     </div>
+
+    <!-- Desktop/tablet sfeerfoto (mobile wordt automatisch verborgen via CSS) -->
+    <div class="auth-aside" aria-hidden="true"></div>
+
   </div>
 </div>
 
@@ -217,6 +265,7 @@
   const nextBtn = document.getElementById('nextBtn');
   const backBtn = document.getElementById('backBtn');
   const createBtn = document.getElementById('createBtn');
+  const navHint = document.getElementById('navHint');
 
   const formError = document.getElementById('formError');
   const formStatus = document.getElementById('formStatus');
@@ -253,19 +302,24 @@
 
   function showError(msg) {
     formError.textContent = msg || '';
-    formError.style.display = msg ? 'block' : 'none';
+    formError.classList.toggle('visible', !!msg);
   }
+
   function showStatus(msg) {
     formStatus.textContent = msg || '';
-    formStatus.style.display = msg ? 'block' : 'none';
+    formStatus.classList.toggle('visible', !!msg);
   }
 
   function go(step) {
     step1.classList.toggle('active', step === 1);
     step2.classList.toggle('active', step === 2);
+
     backBtn.style.display = step === 2 ? 'inline-flex' : 'none';
     nextBtn.style.display = step === 1 ? 'inline-flex' : 'none';
     createBtn.style.display = step === 2 ? 'inline-flex' : 'none';
+
+    navHint.textContent = step === 1 ? 'Step 1 of 2' : 'Step 2 of 2';
+
     showError('');
     showStatus('');
   }
@@ -303,7 +357,6 @@
       }
 
       signupTokenEl.value = data.signupToken;
-      // default billing email = HR email
       billingEmailEl.value = payload.email;
 
       showStatus('');
@@ -323,11 +376,10 @@
     if (!s) return '';
     return s
       .toLowerCase()
-      .split(/(\s+|-|')/g) // keep separators
+      .split(/(\s+|-|')/g)
       .map((part, idx) => {
-        if (part.match(/^\s+|-|'$/)) return part; // separator
+        if (part.match(/^\s+|-|'$/)) return part;
         if (idx !== 0 && LOWER_WORDS.has(part)) return part;
-        // keep leading digits (e.g., "3M") readable
         return part.charAt(0).toUpperCase() + part.slice(1);
       })
       .join('');
@@ -339,7 +391,6 @@
     });
   }
 
-  // Apply Title Case on blur for these fields:
   [
     firstNameEl, lastNameEl,
     companyNameEl,
@@ -348,30 +399,25 @@
     delStreetEl, delCityEl
   ].forEach(onBlurTitleCase);
 
-  // Box fields: usually uppercase (bus A, B12)
   function onBlurUpper(el) {
     el.addEventListener('blur', () => {
       el.value = (el.value || '').trim().toUpperCase();
     });
   }
   [regBoxEl, delBoxEl].forEach(onBlurUpper);
-
-  // Enterprise number: keep as entered but uppercase (EU prefixes)
   onBlurUpper(enterpriseNumberEl);
 
-  // Website: trim only
   websiteEl.addEventListener('blur', () => {
     websiteEl.value = (websiteEl.value || '').trim();
   });
 
-  // emails: never auto-capitalize; only trim
   [emailEl, billingEmailEl].forEach(el => {
     el.addEventListener('blur', () => {
       el.value = (el.value || '').trim();
     });
   });
 
-  // Delivery toggle: show/hide + required
+  // Delivery toggle
   deliveryCheckbox.addEventListener('change', () => {
     const on = deliveryCheckbox.checked;
     deliveryBlock.style.display = on ? 'block' : 'none';
@@ -414,7 +460,6 @@
       delivery_country_code: delCountryEl.value
     };
 
-    // If delivery not different, clear delivery payload (server ignores anyway)
     if (!deliveryIsDifferent) {
       payload.delivery_street = '';
       payload.delivery_box = '';

@@ -69,13 +69,24 @@ body {
   padding: 22px 18px;
 }
 
+/* Aside = sfeerfoto (desktop/tablet). Mobile: hidden. */
 .auth-aside {
   display: none; /* mobile-first: hide */
-  background: linear-gradient(180deg, var(--blue), var(--blue-deep));
-  padding: 34px;
-  color: #e5e7eb;
   position: relative;
   overflow: hidden;
+  padding: 0; /* geen padding nodig voor background-image */
+
+  background-image:
+    linear-gradient(
+      rgba(12, 16, 30, 0.45),
+      rgba(12, 16, 30, 0.80)
+    ),
+    url("/assets/signup_model.png");
+
+  /* 👇 maakt de plate visueel kleiner + houdt focus op hand/telefoon */
+  background-size: 135%;
+  background-position: 78% center;
+  background-repeat: no-repeat;
 }
 
 @media (min-width: 980px) {
@@ -84,13 +95,14 @@ body {
   .auth-aside { display: block; }
 }
 
+/* zachte highlight (optioneel maar mooi) */
 .auth-aside::after {
   content: "";
   position: absolute;
   inset: -140px -120px auto auto;
   width: 420px;
   height: 420px;
-  background: radial-gradient(circle, rgba(253,197,0,0.22), transparent 70%);
+  background: radial-gradient(circle, rgba(253,197,0,0.18), transparent 70%);
   transform: rotate(15deg);
   pointer-events: none;
 }
@@ -143,6 +155,7 @@ body {
   letter-spacing: 0.2px;
 }
 
+/* subtitel blijft bestaan in css (kan later terug), maar wordt nu niet gebruikt */
 .auth-subtitle {
   margin: 0 0 18px;
   color: var(--muted);
@@ -272,13 +285,6 @@ label {
   gap: 6px;
 }
 
-.required-dot {
-  color: #ef4444;
-  font-size: 0.95rem;
-  line-height: 0;
-  margin-top: 2px;
-}
-
 input, select {
   width: 100%;
   border-radius: 14px;
@@ -387,8 +393,6 @@ input:focus, select:focus {
   opacity: 1;
 }
 
-.btn-primary.active { opacity: 1; }
-
 .btn-secondary {
   background: transparent;
   border-color: #cbd5e1;
@@ -435,78 +439,6 @@ input:focus, select:focus {
   .btn-secondary {
     width: 100%;
   }
-}
-
-/* =========================
-   Aside content
-========================= */
-.aside-tag {
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(255,255,255,0.24);
-  padding: 6px 10px;
-  font-size: 0.72rem;
-  font-family: var(--mono);
-  color: rgba(255,255,255,0.92);
-  backdrop-filter: blur(6px);
-  background: rgba(15, 23, 42, 0.6);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.aside-tag-dot {
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(253, 197, 0, 0.12);
-}
-
-.aside-title {
-  margin-top: 1.2rem;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.aside-list {
-  margin: 1rem 0 0;
-  padding-left: 1.2rem;
-  font-size: 0.82rem;
-  color: #e5e7eb;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.aside-list li::marker { color: var(--accent); }
-
-.aside-footer {
-  margin-top: 1.2rem;
-  font-size: 0.75rem;
-  color: #9ca3af;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.aside-footer strong { color: #e5e7eb; }
-
-.pill-status {
-  align-self: flex-start;
-  padding: 0.25rem 0.7rem;
-  border-radius: var(--radius-pill);
-  border: 1px dashed rgba(191, 219, 254, 0.7);
-  font-size: 0.7rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.pill-status-dot {
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 999px;
-  background: #22c55e;
 }
 
 /* =========================
