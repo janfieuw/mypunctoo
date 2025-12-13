@@ -83,12 +83,9 @@ body {
     ),
     url("/assets/signup_model.png");
 
-  /* ✅ simpel: foto vult altijd het vlak */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-
-  /* ✅ vult mee met de hoogte van de card */
   min-height: 100%;
 }
 
@@ -149,7 +146,6 @@ body {
   letter-spacing: 0.2px;
 }
 
-/* subtitel blijft bestaan in css (kan later terug), maar wordt nu niet gebruikt */
 .auth-subtitle {
   margin: 0 0 18px;
   color: var(--muted);
@@ -166,7 +162,7 @@ body {
   align-items: center;
   gap: 10px;
   margin: 18px 0 18px;
-  flex-wrap: wrap; /* mobile wrap */
+  flex-wrap: wrap;
 }
 
 .step-pill {
@@ -284,7 +280,7 @@ input, select {
   border-radius: 14px;
   border: 1px solid #cbd5e1;
   padding: 10px 12px;
-  font-size: 16px; /* iOS zoom fix */
+  font-size: 16px;
   outline: none;
   background: var(--panel-muted);
   font-family: var(--mono);
@@ -302,6 +298,12 @@ input:focus, select:focus {
   margin-top: -8px;
   margin-bottom: 10px;
   line-height: 1.35;
+}
+
+/* ✅ normal-sized help text when needed */
+.help-text-normal {
+  font-size: 0.82rem;
+  margin-top: 0;
 }
 
 .checkbox-row {
@@ -368,8 +370,7 @@ input:focus, select:focus {
   letter-spacing: 0.2px;
   font-size: 0.85rem;
   user-select: none;
-
-  min-height: 44px; /* touch target */
+  min-height: 44px;
   justify-content: center;
 }
 
@@ -398,7 +399,6 @@ input:focus, select:focus {
   transform: translateY(-1px);
 }
 
-/* Sticky CTA on mobile */
 @media (max-width: 560px) {
   .form-navigation {
     position: sticky;
@@ -435,64 +435,10 @@ input:focus, select:focus {
   }
 }
 
-/* =========================
-   Login-only card (re-use auth layout)
-========================= */
-.login-card {
-  width: min(440px, 100%);
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius);
-  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.4);
-  padding: 22px 18px;
-}
-
-@media (min-width: 480px) {
-  .login-card { padding: 28px 24px; }
-}
-
-.login-title {
-  font-family: var(--mono);
-  font-size: 1.25rem;
-  margin: 0 0 0.5rem;
-  color: #020617;
-}
-
-.login-subtitle {
-  margin: 0 0 1.25rem;
-  color: #4b5563;
-  font-size: 0.95rem;
-}
-
-.status {
-  margin-top: 0.75rem;
-  min-height: 1.2rem;
-  font-size: 0.85rem;
-}
-.status--error { color: #b91c1c; }
-.status--ok { color: #166534; }
-
-.footer-link {
-  margin-top: 1.25rem;
-  text-align: center;
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-.footer-link a {
-  color: #111827;
-  text-decoration: none;
-  font-weight: 700;
-}
-.footer-link a:hover { text-decoration: underline; }
-
 /* =========================================================
-   ADDITIONS (keeping existing design intact)
-   - Uppercase view (except email/password)
-   - Enterprise prefix badge (Variant B)
-   - Soft warning style
+   ADDITIONS
 ========================================================= */
 
-/* Visueel: alles uppercase behalve email/password */
 input:not([type="email"]):not([type="password"]),
 select,
 textarea {
@@ -504,7 +450,6 @@ input[type="password"] {
   text-transform: none;
 }
 
-/* Prefix badge layout */
 .prefix-input {
   display: flex;
   align-items: stretch;
@@ -526,7 +471,6 @@ input[type="password"] {
   user-select: none;
 }
 
-/* Soft warning (non-blocking) */
 .soft-warning {
   display: none;
   margin-top: 8px;

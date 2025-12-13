@@ -89,6 +89,41 @@
             <input id="companyName" required autocomplete="organization">
           </div>
 
+          <!-- ✅ Country moved BEFORE enterprise number -->
+          <div class="field">
+            <label>Country *</label>
+            <select id="regCountry" required autocomplete="country">
+              <option value="">Select country</option>
+              <option value="AT">Austria</option>
+              <option value="BE">Belgium</option>
+              <option value="BG">Bulgaria</option>
+              <option value="HR">Croatia</option>
+              <option value="CY">Cyprus</option>
+              <option value="CZ">Czechia</option>
+              <option value="DK">Denmark</option>
+              <option value="EE">Estonia</option>
+              <option value="FI">Finland</option>
+              <option value="FR">France</option>
+              <option value="DE">Germany</option>
+              <option value="GR">Greece</option>
+              <option value="HU">Hungary</option>
+              <option value="IE">Ireland</option>
+              <option value="IT">Italy</option>
+              <option value="LV">Latvia</option>
+              <option value="LT">Lithuania</option>
+              <option value="LU">Luxembourg</option>
+              <option value="MT">Malta</option>
+              <option value="NL">Netherlands</option>
+              <option value="PL">Poland</option>
+              <option value="PT">Portugal</option>
+              <option value="RO">Romania</option>
+              <option value="SK">Slovakia</option>
+              <option value="SI">Slovenia</option>
+              <option value="ES">Spain</option>
+              <option value="SE">Sweden</option>
+            </select>
+          </div>
+
           <!-- ✅ Variant B: prefix-badge + suggested format + soft warning -->
           <div class="field">
             <label>Enterprise / EU business number *</label>
@@ -98,7 +133,8 @@
               <input id="enterpriseNumber" required placeholder="Select country first">
             </div>
 
-            <div class="help-text" id="enterpriseHelp">
+            <!-- ✅ normal font size (not help-text size) -->
+            <div class="help-text help-text-normal" id="enterpriseHelp">
               Select a country to see the suggested format.
             </div>
 
@@ -132,40 +168,6 @@
               <label>City *</label>
               <input id="regCity" required autocomplete="address-level2">
             </div>
-          </div>
-
-          <div class="field">
-            <label>Country *</label>
-            <select id="regCountry" required autocomplete="country">
-              <option value="">Select country</option>
-              <option value="AT">Austria</option>
-              <option value="BE">Belgium</option>
-              <option value="BG">Bulgaria</option>
-              <option value="HR">Croatia</option>
-              <option value="CY">Cyprus</option>
-              <option value="CZ">Czechia</option>
-              <option value="DK">Denmark</option>
-              <option value="EE">Estonia</option>
-              <option value="FI">Finland</option>
-              <option value="FR">France</option>
-              <option value="DE">Germany</option>
-              <option value="GR">Greece</option>
-              <option value="HU">Hungary</option>
-              <option value="IE">Ireland</option>
-              <option value="IT">Italy</option>
-              <option value="LV">Latvia</option>
-              <option value="LT">Lithuania</option>
-              <option value="LU">Luxembourg</option>
-              <option value="MT">Malta</option>
-              <option value="NL">Netherlands</option>
-              <option value="PL">Poland</option>
-              <option value="PT">Portugal</option>
-              <option value="RO">Romania</option>
-              <option value="SK">Slovakia</option>
-              <option value="SI">Slovenia</option>
-              <option value="ES">Spain</option>
-              <option value="SE">Sweden</option>
-            </select>
           </div>
 
           <h3 class="form-section-title">Billing</h3>
@@ -260,7 +262,6 @@
       </form>
     </div>
 
-    <!-- Desktop/tablet sfeerfoto (mobile wordt automatisch verborgen via CSS) -->
     <div class="auth-aside" aria-hidden="true"></div>
 
   </div>
@@ -308,7 +309,6 @@
   const delCityEl = document.getElementById('delCity');
   const delCountryEl = document.getElementById('delCountry');
 
-  // Variant B UI elements
   const enterprisePrefixEl = document.getElementById('enterprisePrefix');
   const enterpriseHelpEl = document.getElementById('enterpriseHelp');
   const enterpriseWarnEl = document.getElementById('enterpriseWarn');
@@ -383,7 +383,7 @@
   backBtn.onclick = () => go(1);
 
   // =========================
-  // 1) AUTO UPPERCASE (except email + passwords)
+  // AUTO UPPERCASE (except email + passwords)
   // =========================
   function shouldUppercase(el) {
     if (!el) return false;
@@ -402,11 +402,9 @@
     const start = el.selectionStart;
     const end = el.selectionEnd;
     el.value = (el.value || '').toUpperCase();
-    // caret netjes houden (voor inputs die dit ondersteunen)
     try { el.setSelectionRange(start, end); } catch (_) {}
   });
 
-  // E-mails: altijd netjes trimmen + lowercase bij blur (consistent)
   [emailEl, billingEmailEl].forEach(el => {
     el.addEventListener('blur', () => {
       el.value = (el.value || '').trim().toLowerCase();
@@ -414,11 +412,10 @@
   });
 
   // =========================
-  // 2) ENTERPRISE NUMBER (Variant B)
+  // ENTERPRISE NUMBER (Variant B)
   // =========================
   function vatPrefixFor(countryCode) {
     if (!countryCode) return '';
-    // EU VAT prefix uitzondering: Greece uses EL
     if (countryCode === 'GR') return 'EL';
     return countryCode;
   }
@@ -502,8 +499,6 @@
 
   regCountryEl.addEventListener('change', () => {
     setEnterpriseUI();
-
-    // Als delivery block open staat, en delivery country nog leeg is: kopieer country
     if (deliveryCheckbox.checked && !delCountryEl.value) {
       delCountryEl.value = regCountryEl.value || '';
     }
@@ -515,7 +510,7 @@
   setEnterpriseUI();
 
   // =========================
-  // 3) DELIVERY TOGGLE: auto-copy country
+  // DELIVERY TOGGLE: auto-copy country
   // =========================
   deliveryCheckbox.addEventListener('change', () => {
     const on = deliveryCheckbox.checked;
@@ -527,7 +522,6 @@
     });
 
     if (on) {
-      // Default delivery country = registered country
       delCountryEl.value = regCountryEl.value || '';
     }
   });
@@ -539,7 +533,6 @@
 
     const deliveryIsDifferent = !!deliveryCheckbox.checked;
 
-    // Ensure enterprise number includes prefix
     const prefix = vatPrefixFor(regCountryEl.value);
     const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
     const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
