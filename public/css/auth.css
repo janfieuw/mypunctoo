@@ -102,7 +102,7 @@ body {
   inset: -140px -120px auto auto;
   width: 420px;
   height: 420px;
-  background: radial-gradient(circle, rgba(253,197,0,0.18), transparent 70%);
+  background: radial-gradient(circle, rgba(255,255,255,0.12), transparent 70%);
   transform: rotate(15deg);
   pointer-events: none;
 }
