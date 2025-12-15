@@ -300,6 +300,27 @@ async function hydrateClientRecord() {
     const addrEl = document.getElementById("cr-registered-address");
     if (addrEl) addrEl.innerHTML = addr ? addr.split("\n").map(line => `${escapeHtml(line)}<br>`).join("") : "–";
 
+    // ✅ NEW: delivery address + delivery contact (if the view contains those fields)
+    const delAddrLines = [
+      c.delivery?.street,
+      `${c.delivery?.postalCode || ""} ${c.delivery?.city || ""}`.trim(),
+      c.delivery?.country
+    ].filter(Boolean);
+
+    const delAddrEl = document.getElementById("cr-delivery-address");
+    if (delAddrEl) {
+      if (delAddrLines.length) {
+        delAddrEl.innerHTML = delAddrLines.map(line => `${escapeHtml(line)}<br>`).join("");
+      } else {
+        delAddrEl.textContent = "Same as registered address.";
+      }
+    }
+
+    const delContactEl = document.getElementById("cr-delivery-contact");
+    if (delContactEl) {
+      delContactEl.textContent = c.deliveryContactPerson || c.registeredContactPerson || "–";
+    }
+
     // subscription meta
     const metaEl = document.getElementById("client-status-meta");
     if (metaEl) {
