@@ -79,7 +79,6 @@
             <input id="companyName" required autocomplete="organization">
           </div>
 
-          <!-- ✅ Country moved BEFORE enterprise number -->
           <div class="field">
             <label>Country *</label>
             <select id="regCountry" required autocomplete="country">
@@ -114,7 +113,6 @@
             </select>
           </div>
 
-          <!-- ✅ prefix-badge + suggested format + soft warning -->
           <div class="field">
             <label>Enterprise / EU business number *</label>
 
@@ -123,7 +121,6 @@
               <input id="enterpriseNumber" required placeholder="Select country first">
             </div>
 
-            <!-- ✅ normal font size (not help-text size) -->
             <div class="help-text help-text-normal" id="enterpriseHelp">
               Select a country to see the suggested format.
             </div>
@@ -138,6 +135,11 @@
           </div>
 
           <h3 class="form-section-title">Registered address</h3>
+
+          <div class="field">
+            <label>Contact person *</label>
+            <input id="regContactPerson" required autocomplete="name">
+          </div>
 
           <div class="field">
             <label>Street + number *</label>
@@ -179,6 +181,11 @@
 
           <div id="deliveryBlock" style="display:none;">
             <h3 class="form-section-title">Delivery address</h3>
+
+            <div class="field">
+              <label>Contact person *</label>
+              <input id="delContactPerson">
+            </div>
 
             <div class="field">
               <label>Street + number *</label>
@@ -272,6 +279,11 @@
             </div>
           </div>
 
+          <!-- ✅ NEW: extra mention under the summary (Step 3) -->
+          <div class="help-text">
+            You can also order one or more additional Plates later via your MyPunctoo dashboard.
+          </div>
+
           <div class="checkbox-row checkbox-row-strong">
             <input type="checkbox" id="salesTerms" required>
             <span>I have read and accept the sales terms & conditions</span>
@@ -327,11 +339,15 @@
   const enterpriseNumberEl = document.getElementById('enterpriseNumber');
   const websiteEl = document.getElementById('website');
 
+  const regCountryEl = document.getElementById('regCountry');
+
+  const regContactPersonEl = document.getElementById('regContactPerson');
+  const delContactPersonEl = document.getElementById('delContactPerson');
+
   const regStreetEl = document.getElementById('regStreet');
   const regBoxEl = document.getElementById('regBox');
   const regPostalEl = document.getElementById('regPostal');
   const regCityEl = document.getElementById('regCity');
-  const regCountryEl = document.getElementById('regCountry');
 
   const billingEmailEl = document.getElementById('billingEmail');
   const billingReferenceEl = document.getElementById('billingReference');
@@ -425,9 +441,6 @@
   extraPlatesEl.addEventListener('input', updateTotal);
   extraPlatesEl.addEventListener('blur', updateTotal);
 
-  // =========================
-  // ENTERPRISE NUMBER (Variant B)
-  // =========================
   function vatPrefixFor(countryCode) {
     if (!countryCode) return '';
     if (countryCode === 'GR') return 'EL';
@@ -523,9 +536,6 @@
 
   setEnterpriseUI();
 
-  // =========================
-  // DELIVERY TOGGLE: auto-copy country
-  // =========================
   deliveryCheckbox.addEventListener('change', () => {
     const on = deliveryCheckbox.checked;
     deliveryBlock.style.display = on ? 'block' : 'none';
@@ -540,9 +550,6 @@
     }
   });
 
-  // =========================
-  // AUTO UPPERCASE (except email + passwords)
-  // =========================
   function shouldUppercase(el) {
     if (!el) return false;
     if (el.tagName === 'SELECT') return true;
@@ -569,9 +576,6 @@
     });
   });
 
-  // =========================
-  // NAV LOGIC
-  // =========================
   let currentStep = 1;
 
   backBtn.onclick = () => {
@@ -583,7 +587,6 @@
     showError('');
     showStatus('');
 
-    // STEP 1 -> create account (no order yet)
     if (currentStep === 1) {
       const payload = {
         email: (emailEl.value || '').trim(),
@@ -623,7 +626,6 @@
       return;
     }
 
-    // STEP 2 -> save company details, go to checkout confirmation
     if (currentStep === 2) {
       const deliveryIsDifferent = !!deliveryCheckbox.checked;
 
@@ -640,6 +642,9 @@
         company_name: (companyNameEl.value || '').trim(),
         enterprise_number: (enterpriseNumberEl.value || '').trim(),
         website: (websiteEl.value || '').trim(),
+
+        registered_contact_person: (regContactPersonEl.value || '').trim(),
+        delivery_contact_person: (delContactPersonEl.value || '').trim(),
 
         registered_street: (regStreetEl.value || '').trim(),
         registered_box: (regBoxEl.value || '').trim(),
@@ -659,6 +664,7 @@
       };
 
       if (!deliveryIsDifferent) {
+        payload.delivery_contact_person = '';
         payload.delivery_street = '';
         payload.delivery_box = '';
         payload.delivery_postal_code = '';
@@ -690,7 +696,6 @@
     }
   };
 
-  // STEP 3 -> confirm order & activate
   confirmBtn.onclick = async () => {
     showError('');
     showStatus('');
@@ -733,7 +738,6 @@
     }
   };
 
-  // Init
   go(1);
   updateTotal();
 })();

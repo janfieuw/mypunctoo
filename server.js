@@ -231,6 +231,10 @@ app.post('/api/signup/step2', async (req, res) => {
       enterprise_number,
       website,
 
+      // ✅ NEW
+      registered_contact_person,
+      delivery_contact_person,
+
       registered_street,
       registered_box,
       registered_postal_code,
@@ -271,6 +275,7 @@ app.post('/api/signup/step2', async (req, res) => {
     if (
       !company_name ||
       !enterprise_number ||
+      !registered_contact_person || // ✅ NEW required
       !registered_street ||
       !registered_postal_code ||
       !registered_city ||
@@ -294,7 +299,13 @@ app.post('/api/signup/step2', async (req, res) => {
 
     let delCountry = '';
     if (deliveryIsDifferent) {
-      if (!delivery_street || !delivery_postal_code || !delivery_city || !delivery_country_code) {
+      if (
+        !delivery_contact_person || // ✅ NEW required if delivery differs
+        !delivery_street ||
+        !delivery_postal_code ||
+        !delivery_city ||
+        !delivery_country_code
+      ) {
         return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
       }
       delCountry = String(delivery_country_code).toUpperCase();
@@ -316,6 +327,10 @@ app.post('/api/signup/step2', async (req, res) => {
       name: toTitleCase(company_name),
       enterpriseNumber: normalizeUpper(enterprise_number),
       website: websiteNormalized || null,
+
+      // ✅ NEW (kept separate for later use)
+      registeredContactPerson: toTitleCase(registered_contact_person),
+      deliveryContactPerson: deliveryIsDifferent ? toTitleCase(delivery_contact_person) : null,
 
       registeredAddress: {
         street: toTitleCase(registered_street),
@@ -391,8 +406,26 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const c = s.draftCompany;
 
-    const registeredAddressText = buildAddressLine(c.registeredAddress);
-    const billingAddressText = buildAddressLine(c.registeredAddress);
+    // Build address text blocks (keeps DB schema unchanged)
+    const regLine = buildAddressLine(c.registeredAddress);
+    const delLine = buildAddressLine(c.deliveryAddress);
+
+    const registeredAddressTextParts = [
+      `CONTACT PERSON: ${safeText(c.registeredContactPerson)}`,
+      regLine
+    ].filter(Boolean);
+
+    // If delivery differs, store it as extra lines in the registered_address text
+    if (c.deliveryAddress) {
+      registeredAddressTextParts.push(
+        '',
+        `DELIVERY CONTACT PERSON: ${safeText(c.deliveryContactPerson)}`,
+        delLine
+      );
+    }
+
+    const registeredAddressText = registeredAddressTextParts.join('\n');
+    const billingAddressText = registeredAddressText; // consistent with current behaviour
 
     const companyCode = makeCompanyCode(c.name);
 
