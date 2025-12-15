@@ -670,41 +670,96 @@ app.get('/api/company', requireAuth, async (req, res) => {
 
     // Extra safeguard: force uppercase for displayed fields
     // (Email + website blijven lowercase)
-    const c = rows[0];
+    const r = rows[0];
+
+    const company_code = safeText(r.company_code);
+    const name = normalizeUpper(r.name);
+    const vat_number = normalizeUpper(r.vat_number);
+
+    const registered_contact_person = normalizeUpper(r.registered_contact_person);
+    const delivery_contact_person = normalizeUpper(r.delivery_contact_person);
+
+    const website = safeText(r.website) ? normalizeLower(r.website) : r.website;
+
+    const registered_street = normalizeUpper(r.registered_street);
+    const registered_box = normalizeUpper(r.registered_box);
+    const registered_postal_code = normalizeUpper(r.registered_postal_code);
+    const registered_city = normalizeUpper(r.registered_city);
+    const registered_country_code = normalizeUpper(r.registered_country_code);
+
+    const billing_street = normalizeUpper(r.billing_street);
+    const billing_box = normalizeUpper(r.billing_box);
+    const billing_postal_code = normalizeUpper(r.billing_postal_code);
+    const billing_city = normalizeUpper(r.billing_city);
+    const billing_country_code = normalizeUpper(r.billing_country_code);
+
+    const delivery_street = normalizeUpper(r.delivery_street);
+    const delivery_box = normalizeUpper(r.delivery_box);
+    const delivery_postal_code = normalizeUpper(r.delivery_postal_code);
+    const delivery_city = normalizeUpper(r.delivery_city);
+    const delivery_country_code = normalizeUpper(r.delivery_country_code);
+
+    const registered_address = normalizeUpper(r.registered_address);
+    const billing_address = normalizeUpper(r.billing_address);
+
+    const billing_email = safeText(r.billing_email) ? normalizeLower(r.billing_email) : r.billing_email;
+    const billing_reference = normalizeUpper(r.billing_reference);
+
+    // ---- FIX: maak ook het object dat app.js verwacht (camelCase + contact) ----
+    const fullContact = safeText(registered_contact_person);
+    const parts = fullContact.split(/\s+/).filter(Boolean);
+    const firstName = parts.shift() || '';
+    const lastName = parts.join(' ') || '';
+
     const company = {
-      ...c,
-      company_code: safeText(c.company_code),
-      name: normalizeUpper(c.name),
-      vat_number: normalizeUpper(c.vat_number),
+      // app.js velden (camelCase)
+      name,
+      code: company_code,
+      vatNumber: vat_number,
+      billingPlan: '–', // (nog geen veld in DB)
+      contact: {
+        firstName,
+        lastName,
+        role: '',
+        email: '' // contact-email bestaat niet in DB; invoiceEmail komt hieronder
+      },
+      employeeCount: r.estimated_user_count,
+      invoiceEmail: billing_email || '',
+      billingReference: billing_reference || '–',
 
-      registered_contact_person: normalizeUpper(c.registered_contact_person),
-      delivery_contact_person: normalizeUpper(c.delivery_contact_person),
+      // geregistreerd adres (app.js toont dit)
+      street: registered_street,
+      postalCode: registered_postal_code,
+      city: registered_city,
+      country: registered_country_code,
 
-      website: safeText(c.website) ? normalizeLower(c.website) : c.website,
+      subscriptionNumber: '–',
+      subscriptionStartDate: '–',
 
-      registered_street: normalizeUpper(c.registered_street),
-      registered_box: normalizeUpper(c.registered_box),
-      registered_postal_code: normalizeUpper(c.registered_postal_code),
-      registered_city: normalizeUpper(c.registered_city),
-      registered_country_code: normalizeUpper(c.registered_country_code),
+      // extra (handig/debug; stoort app.js niet)
+      website: website || '',
+      registeredContactPerson: registered_contact_person || '',
+      deliveryContactPerson: delivery_contact_person || '',
 
-      billing_street: normalizeUpper(c.billing_street),
-      billing_box: normalizeUpper(c.billing_box),
-      billing_postal_code: normalizeUpper(c.billing_postal_code),
-      billing_city: normalizeUpper(c.billing_city),
-      billing_country_code: normalizeUpper(c.billing_country_code),
+      // legacy/extra address (optioneel)
+      registeredAddressText: registered_address || '',
+      billingAddressText: billing_address || '',
 
-      delivery_street: normalizeUpper(c.delivery_street),
-      delivery_box: normalizeUpper(c.delivery_box),
-      delivery_postal_code: normalizeUpper(c.delivery_postal_code),
-      delivery_city: normalizeUpper(c.delivery_city),
-      delivery_country_code: normalizeUpper(c.delivery_country_code),
-
-      registered_address: normalizeUpper(c.registered_address),
-      billing_address: normalizeUpper(c.billing_address),
-
-      billing_email: safeText(c.billing_email) ? normalizeLower(c.billing_email) : c.billing_email,
-      billing_reference: normalizeUpper(c.billing_reference)
+      // delivery & billing structured (optioneel)
+      billing: {
+        street: billing_street,
+        box: billing_box,
+        postalCode: billing_postal_code,
+        city: billing_city,
+        country: billing_country_code
+      },
+      delivery: {
+        street: delivery_street,
+        box: delivery_box,
+        postalCode: delivery_postal_code,
+        city: delivery_city,
+        country: delivery_country_code
+      }
     };
 
     res.json({ ok: true, company });
@@ -730,3 +785,4 @@ app.get('/api/health', async (_, res) => {
 app.listen(PORT, () => {
   console.log(`MyPunctoo backend listening on port ${PORT}`);
 });
+
