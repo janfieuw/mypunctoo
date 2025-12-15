@@ -131,6 +131,27 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function buildAddressLine(addr) {
+  if (!addr) return '';
+  const line = [
+    safeText(addr.street),
+    safeText(addr.box),
+    [safeText(addr.postalCode), safeText(addr.city)].filter(Boolean).join(' ').trim(),
+    safeText(addr.country)
+  ].filter(Boolean).join(', ');
+  return line;
+}
+
+function makeCompanyCode(companyName) {
+  const base = safeText(companyName)
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 8);
+
+  const suffix = String(Math.floor(1000 + Math.random() * 9000));
+  return `${base || 'COMP'}-${suffix}`;
+}
+
 // =========================================================
 // Pricing
 // =========================================================
@@ -370,30 +391,33 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const c = s.draftCompany;
 
-    // Create company (klantfiche)
+    const registeredAddressText = buildAddressLine(c.registeredAddress);
+    const billingAddressText = buildAddressLine(c.registeredAddress);
+
+    const companyCode = makeCompanyCode(c.name);
+
+    // Create company (mapped to your existing schema)
     const compIns = await client.query(
       `INSERT INTO companies (
-        company_name,
-        vat_country,
+        company_code,
+        name,
         vat_number,
-        address_line1,
-        address_line2,
-        postal_code,
-        city,
-        country,
-        billing_email
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        registered_address,
+        billing_address,
+        billing_email,
+        billing_reference,
+        estimated_user_count
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING id`,
       [
+        companyCode,
         c.name,
-        c.registeredAddress?.country || null,
         c.enterpriseNumber || null,
-        c.registeredAddress?.street || null,
-        c.registeredAddress?.box || null,
-        c.registeredAddress?.postalCode || null,
-        c.registeredAddress?.city || null,
-        c.registeredAddress?.country || null,
-        c.billing?.email || null
+        registeredAddressText || null,
+        billingAddressText || null,
+        c.billing?.email || null,
+        c.billing?.reference || null,
+        1
       ]
     );
 
@@ -508,16 +532,16 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
         id,
-        company_name,
-        vat_country,
+        company_code,
+        name,
         vat_number,
-        address_line1,
-        address_line2,
-        postal_code,
-        city,
-        country,
+        registered_address,
+        billing_address,
         billing_email,
-        created_at
+        billing_reference,
+        estimated_user_count,
+        created_at,
+        updated_at
       FROM companies
       WHERE id = $1
       LIMIT 1`,
