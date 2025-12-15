@@ -75,7 +75,7 @@ async function requireAuth(req, res, next) {
     const { userId } = sessionsByToken.get(token);
 
     const { rows } = await pool.query(
-      'SELECT id, email, role, is_active, customer_id FROM users WHERE id = $1 LIMIT 1',
+      'SELECT id, email, role, is_active, company_id FROM client_portal_users WHERE id = $1 LIMIT 1',
       [userId]
     );
 
@@ -145,7 +145,7 @@ const PRICING = {
 // =========================================================
 async function emailExists(emailLower) {
   const { rows } = await pool.query(
-    'SELECT 1 FROM users WHERE email = $1 LIMIT 1',
+    'SELECT 1 FROM client_portal_users WHERE email = $1 LIMIT 1',
     [emailLower]
   );
   return rows.length > 0;
@@ -328,7 +328,7 @@ app.post('/api/signup/step2', async (req, res) => {
 });
 
 // =========================================================
-// API: Signup step 3 (Confirm order; create customer + user in DB)
+// API: Signup step 3 (Confirm order; create company + user in DB)
 // =========================================================
 app.post('/api/signup/step3', async (req, res) => {
   const client = await pool.connect();
@@ -370,9 +370,9 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const c = s.draftCompany;
 
-    // Create customer (klantfiche)
-    const custIns = await client.query(
-      `INSERT INTO customers (
+    // Create company (klantfiche)
+    const compIns = await client.query(
+      `INSERT INTO companies (
         company_name,
         vat_country,
         vat_number,
@@ -381,10 +381,8 @@ app.post('/api/signup/step3', async (req, res) => {
         postal_code,
         city,
         country,
-        contact_name,
-        contact_phone,
         billing_email
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING id`,
       [
         c.name,
@@ -395,20 +393,18 @@ app.post('/api/signup/step3', async (req, res) => {
         c.registeredAddress?.postalCode || null,
         c.registeredAddress?.city || null,
         c.registeredAddress?.country || null,
-        null,
-        null,
         c.billing?.email || null
       ]
     );
 
-    const customerId = custIns.rows[0].id;
+    const companyId = compIns.rows[0].id;
 
-    // Create user linked to customer
+    // Create user linked to company
     const userIns = await client.query(
-      `INSERT INTO users (email, password_hash, role, is_active, customer_id)
+      `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id)
        VALUES ($1,$2,'customer_admin', true, $3)
        RETURNING id`,
-      [emailKey, s.passHash, customerId]
+      [emailKey, s.passHash, companyId]
     );
 
     const userId = userIns.rows[0].id;
@@ -429,7 +425,7 @@ app.post('/api/signup/step3', async (req, res) => {
         monthlyExclVat: PRICING.monthlyFee,
         salesTermsAccepted: true
       },
-      created: { userId, customerId }
+      created: { userId, companyId }
     });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch {}
@@ -455,7 +451,7 @@ app.post('/api/login', async (req, res) => {
     const emailKey = String(email || '').trim().toLowerCase();
 
     const { rows } = await pool.query(
-      'SELECT id, email, password_hash, is_active FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, email, password_hash, is_active FROM client_portal_users WHERE email = $1 LIMIT 1',
       [emailKey]
     );
 
@@ -463,7 +459,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
     }
 
-    const ok = await bcrypt.compare(String(password || ''), rows[0].password_hash);
+    const ok = await bcrypt.compare(String(password), rows[0].password_hash);
     if (!ok) {
       return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
     }
@@ -488,7 +484,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
       id: req.auth.user.id,
       email: req.auth.user.email,
       role: req.auth.user.role,
-      customerId: req.auth.user.customer_id
+      companyId: req.auth.user.company_id
     }
   });
 });
@@ -502,12 +498,12 @@ app.post('/api/logout', requireAuth, (req, res) => {
 });
 
 // =========================================================
-// API: Company (customers) from DB
+// API: Company (companies) from DB
 // =========================================================
 app.get('/api/company', requireAuth, async (req, res) => {
   try {
-    const customerId = req.auth.user.customer_id;
-    if (!customerId) return res.status(404).json({ ok: false });
+    const companyId = req.auth.user.company_id;
+    if (!companyId) return res.status(404).json({ ok: false });
 
     const { rows } = await pool.query(
       `SELECT
@@ -522,10 +518,10 @@ app.get('/api/company', requireAuth, async (req, res) => {
         country,
         billing_email,
         created_at
-      FROM customers
+      FROM companies
       WHERE id = $1
       LIMIT 1`,
-      [customerId]
+      [companyId]
     );
 
     if (!rows.length) return res.status(404).json({ ok: false });
