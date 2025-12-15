@@ -60,6 +60,14 @@ function safeText(v) {
   return String(v).trim();
 }
 
+function normalizeUpper(str) {
+  return safeText(str).toUpperCase();
+}
+
+function normalizeLower(str) {
+  return safeText(str).toLowerCase();
+}
+
 function getTokenFromRequest(req) {
   const auth = req.headers.authorization || '';
   return auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -92,25 +100,6 @@ async function requireAuth(req, res, next) {
   }
 }
 
-const LOWER_WORDS = new Set(['de','der','den','van','von','da','di','la','le','du','des','of','and']);
-function toTitleCase(str) {
-  const s = safeText(str);
-  if (!s) return '';
-  return s
-    .toLowerCase()
-    .split(/(\s+|-|')/g)
-    .map((part, idx) => {
-      if (part.match(/^\s+|-|'$/)) return part;
-      if (idx !== 0 && LOWER_WORDS.has(part)) return part;
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
-    .join('');
-}
-
-function normalizeUpper(str) {
-  return safeText(str).toUpperCase();
-}
-
 function isValidWebsite(url) {
   const v = safeText(url);
   if (!v) return true; // optional
@@ -131,13 +120,12 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function buildAddressLine(addr) {
-  if (!addr) return '';
+function buildAddressLineFromFields(street, box, postalCode, city, countryCode) {
   const line = [
-    safeText(addr.street),
-    safeText(addr.box),
-    [safeText(addr.postalCode), safeText(addr.city)].filter(Boolean).join(' ').trim(),
-    safeText(addr.country)
+    safeText(street),
+    safeText(box),
+    [safeText(postalCode), safeText(city)].filter(Boolean).join(' ').trim(),
+    safeText(countryCode)
   ].filter(Boolean).join(', ');
   return line;
 }
@@ -195,7 +183,7 @@ app.post('/api/signup/step1', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
     }
 
-    const key = String(email).trim().toLowerCase();
+    const key = normalizeLower(email);
     if (await emailExists(key)) {
       return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
     }
@@ -231,7 +219,6 @@ app.post('/api/signup/step2', async (req, res) => {
       enterprise_number,
       website,
 
-      // ✅ NEW
       registered_contact_person,
       delivery_contact_person,
 
@@ -258,7 +245,7 @@ app.post('/api/signup/step2', async (req, res) => {
 
     const s = signupTokens.get(signup_token);
 
-    const emailKey = String(email || '').trim().toLowerCase();
+    const emailKey = normalizeLower(email || '');
     if (s.email !== emailKey) {
       return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
     }
@@ -275,7 +262,7 @@ app.post('/api/signup/step2', async (req, res) => {
     if (
       !company_name ||
       !enterprise_number ||
-      !registered_contact_person || // ✅ NEW required
+      !registered_contact_person ||
       !registered_street ||
       !registered_postal_code ||
       !registered_city ||
@@ -285,12 +272,12 @@ app.post('/api/signup/step2', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Missing company fields.' });
     }
 
-    const regCountry = String(registered_country_code).toUpperCase();
+    const regCountry = normalizeUpper(registered_country_code);
     if (!EU_COUNTRIES.has(regCountry)) {
       return res.status(400).json({ ok: false, error: 'Invalid country code.' });
     }
 
-    const billingEmailKey = String(billing_email).trim().toLowerCase();
+    const billingEmailKey = normalizeLower(billing_email);
     if (!isValidEmail(billingEmailKey)) {
       return res.status(400).json({ ok: false, error: 'Invalid billing e-mail address.' });
     }
@@ -300,7 +287,7 @@ app.post('/api/signup/step2', async (req, res) => {
     let delCountry = '';
     if (deliveryIsDifferent) {
       if (
-        !delivery_contact_person || // ✅ NEW required if delivery differs
+        !delivery_contact_person ||
         !delivery_street ||
         !delivery_postal_code ||
         !delivery_city ||
@@ -308,7 +295,7 @@ app.post('/api/signup/step2', async (req, res) => {
       ) {
         return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
       }
-      delCountry = String(delivery_country_code).toUpperCase();
+      delCountry = normalizeUpper(delivery_country_code);
       if (!EU_COUNTRIES.has(delCountry)) {
         return res.status(400).json({ ok: false, error: 'Invalid delivery country code.' });
       }
@@ -320,37 +307,37 @@ app.post('/api/signup/step2', async (req, res) => {
 
     const websiteClean = safeText(website);
     const websiteNormalized = websiteClean
-      ? (websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
+      ? normalizeLower(websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
       : '';
 
+    // ✅ Alles wat in dashboard/DB komt => HOOFDLETTERS (behalve email/website)
     s.draftCompany = {
-      name: toTitleCase(company_name),
+      name: normalizeUpper(company_name),
       enterpriseNumber: normalizeUpper(enterprise_number),
       website: websiteNormalized || null,
 
-      // ✅ NEW (kept separate for later use)
-      registeredContactPerson: toTitleCase(registered_contact_person),
-      deliveryContactPerson: deliveryIsDifferent ? toTitleCase(delivery_contact_person) : null,
+      registeredContactPerson: normalizeUpper(registered_contact_person),
+      deliveryContactPerson: deliveryIsDifferent ? normalizeUpper(delivery_contact_person) : null,
 
-      registeredAddress: {
-        street: toTitleCase(registered_street),
+      registered: {
+        street: normalizeUpper(registered_street),
         box: normalizeUpper(registered_box),
-        postalCode: safeText(registered_postal_code),
-        city: toTitleCase(registered_city),
-        country: regCountry
+        postalCode: normalizeUpper(registered_postal_code),
+        city: normalizeUpper(registered_city),
+        countryCode: regCountry
       },
 
       billing: {
-        email: billingEmailKey,
-        reference: toTitleCase(billing_reference)
+        email: billingEmailKey, // lowercase
+        reference: normalizeUpper(billing_reference)
       },
 
-      deliveryAddress: deliveryIsDifferent ? {
-        street: toTitleCase(delivery_street),
+      delivery: deliveryIsDifferent ? {
+        street: normalizeUpper(delivery_street),
         box: normalizeUpper(delivery_box),
-        postalCode: safeText(delivery_postal_code),
-        city: toTitleCase(delivery_city),
-        country: delCountry
+        postalCode: normalizeUpper(delivery_postal_code),
+        city: normalizeUpper(delivery_city),
+        countryCode: delCountry
       } : null
     };
 
@@ -377,7 +364,7 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const s = signupTokens.get(signup_token);
 
-    const emailKey = String(email || '').trim().toLowerCase();
+    const emailKey = normalizeLower(email || '');
     if (s.email !== emailKey) {
       return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
     }
@@ -406,50 +393,122 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const c = s.draftCompany;
 
-    // Build address text blocks (keeps DB schema unchanged)
-    const regLine = buildAddressLine(c.registeredAddress);
-    const delLine = buildAddressLine(c.deliveryAddress);
+    // Registered (structured + legacy text)
+    const regLine = buildAddressLineFromFields(
+      c.registered.street,
+      c.registered.box,
+      c.registered.postalCode,
+      c.registered.city,
+      c.registered.countryCode
+    );
 
-    const registeredAddressTextParts = [
-      `CONTACT PERSON: ${safeText(c.registeredContactPerson)}`,
-      regLine
-    ].filter(Boolean);
+    // Delivery (structured; if not different => mirror registered)
+    const del = c.delivery ? c.delivery : c.registered;
 
-    // If delivery differs, store it as extra lines in the registered_address text
-    if (c.deliveryAddress) {
-      registeredAddressTextParts.push(
-        '',
-        `DELIVERY CONTACT PERSON: ${safeText(c.deliveryContactPerson)}`,
-        delLine
-      );
-    }
+    const delLine = buildAddressLineFromFields(
+      del.street,
+      del.box,
+      del.postalCode,
+      del.city,
+      del.countryCode
+    );
 
-    const registeredAddressText = registeredAddressTextParts.join('\n');
-    const billingAddressText = registeredAddressText; // consistent with current behaviour
+    // Billing (geen aparte billing velden in signup => mirror registered)
+    const bill = c.registered;
+
+    const billLine = buildAddressLineFromFields(
+      bill.street,
+      bill.box,
+      bill.postalCode,
+      bill.city,
+      bill.countryCode
+    );
 
     const companyCode = makeCompanyCode(c.name);
 
-    // Create company (mapped to your existing schema)
+    // ✅ Correct insert: alles in eigen kolommen + legacy address fields ook netjes
     const compIns = await client.query(
       `INSERT INTO companies (
         company_code,
         name,
         vat_number,
+
+        website,
+
+        registered_contact_person,
+        delivery_contact_person,
+
+        registered_street,
+        registered_box,
+        registered_postal_code,
+        registered_city,
+        registered_country_code,
+
+        billing_street,
+        billing_box,
+        billing_postal_code,
+        billing_city,
+        billing_country_code,
+
+        delivery_street,
+        delivery_box,
+        delivery_postal_code,
+        delivery_city,
+        delivery_country_code,
+
         registered_address,
         billing_address,
+
         billing_email,
         billing_reference,
+
         estimated_user_count
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ) VALUES (
+        $1,$2,$3,
+        $4,
+        $5,$6,
+        $7,$8,$9,$10,$11,
+        $12,$13,$14,$15,$16,
+        $17,$18,$19,$20,$21,
+        $22,$23,
+        $24,$25,
+        $26
+      )
       RETURNING id`,
       [
         companyCode,
         c.name,
         c.enterpriseNumber || null,
-        registeredAddressText || null,
-        billingAddressText || null,
-        c.billing?.email || null,
-        c.billing?.reference || null,
+
+        c.website || null,
+
+        c.registeredContactPerson || null,
+        (c.delivery ? c.deliveryContactPerson : c.registeredContactPerson) || null,
+
+        c.registered.street || null,
+        c.registered.box || null,
+        c.registered.postalCode || null,
+        c.registered.city || null,
+        c.registered.countryCode || null,
+
+        bill.street || null,
+        bill.box || null,
+        bill.postalCode || null,
+        bill.city || null,
+        bill.countryCode || null,
+
+        del.street || null,
+        del.box || null,
+        del.postalCode || null,
+        del.city || null,
+        del.countryCode || null,
+
+        regLine || null,
+        billLine || null,
+
+        c.billing?.email || null,      // lowercase
+        c.billing?.reference || null,  // uppercase
+
         1
       ]
     );
@@ -505,7 +564,7 @@ app.post('/api/signup/step3', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const emailKey = String(email || '').trim().toLowerCase();
+    const emailKey = normalizeLower(email || '');
 
     const { rows } = await pool.query(
       'SELECT id, email, password_hash, is_active FROM client_portal_users WHERE email = $1 LIMIT 1',
@@ -568,10 +627,36 @@ app.get('/api/company', requireAuth, async (req, res) => {
         company_code,
         name,
         vat_number,
+
+        registered_contact_person,
+        delivery_contact_person,
+
+        website,
+
+        registered_street,
+        registered_box,
+        registered_postal_code,
+        registered_city,
+        registered_country_code,
+
+        billing_street,
+        billing_box,
+        billing_postal_code,
+        billing_city,
+        billing_country_code,
+
+        delivery_street,
+        delivery_box,
+        delivery_postal_code,
+        delivery_city,
+        delivery_country_code,
+
         registered_address,
         billing_address,
+
         billing_email,
         billing_reference,
+
         estimated_user_count,
         created_at,
         updated_at
@@ -583,7 +668,46 @@ app.get('/api/company', requireAuth, async (req, res) => {
 
     if (!rows.length) return res.status(404).json({ ok: false });
 
-    res.json({ ok: true, company: rows[0] });
+    // Extra safeguard: force uppercase for displayed fields
+    // (Email + website blijven lowercase)
+    const c = rows[0];
+    const company = {
+      ...c,
+      company_code: safeText(c.company_code),
+      name: normalizeUpper(c.name),
+      vat_number: normalizeUpper(c.vat_number),
+
+      registered_contact_person: normalizeUpper(c.registered_contact_person),
+      delivery_contact_person: normalizeUpper(c.delivery_contact_person),
+
+      website: safeText(c.website) ? normalizeLower(c.website) : c.website,
+
+      registered_street: normalizeUpper(c.registered_street),
+      registered_box: normalizeUpper(c.registered_box),
+      registered_postal_code: normalizeUpper(c.registered_postal_code),
+      registered_city: normalizeUpper(c.registered_city),
+      registered_country_code: normalizeUpper(c.registered_country_code),
+
+      billing_street: normalizeUpper(c.billing_street),
+      billing_box: normalizeUpper(c.billing_box),
+      billing_postal_code: normalizeUpper(c.billing_postal_code),
+      billing_city: normalizeUpper(c.billing_city),
+      billing_country_code: normalizeUpper(c.billing_country_code),
+
+      delivery_street: normalizeUpper(c.delivery_street),
+      delivery_box: normalizeUpper(c.delivery_box),
+      delivery_postal_code: normalizeUpper(c.delivery_postal_code),
+      delivery_city: normalizeUpper(c.delivery_city),
+      delivery_country_code: normalizeUpper(c.delivery_country_code),
+
+      registered_address: normalizeUpper(c.registered_address),
+      billing_address: normalizeUpper(c.billing_address),
+
+      billing_email: safeText(c.billing_email) ? normalizeLower(c.billing_email) : c.billing_email,
+      billing_reference: normalizeUpper(c.billing_reference)
+    };
+
+    res.json({ ok: true, company });
   } catch (err) {
     console.error('company error:', err);
     res.status(500).json({ ok: false, error: 'Server error.' });
