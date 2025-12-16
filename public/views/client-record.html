@@ -15,8 +15,8 @@
         Active
       </span>
       <p class="client-status-meta" id="client-status-meta">
-        Subscription no.: <strong>SUB-000127</strong><br>
-        Start date: <strong>2026-01-01</strong>
+        Subscription no.: <strong>–</strong><br>
+        Start date: <strong>–</strong>
       </p>
 
       <div class="sub-toggle-wrapper">
@@ -50,14 +50,11 @@
   </div>
 
   <div class="client-grid">
+
+    <!-- COMPANY -->
     <div class="client-field">
       <div class="client-field-label">Company name</div>
       <div class="client-field-value" id="cr-company-name">–</div>
-    </div>
-
-    <div class="client-field">
-      <div class="client-field-label">Company ID</div>
-      <div class="client-field-value" id="cr-company-code">–</div>
     </div>
 
     <div class="client-field">
@@ -65,16 +62,13 @@
       <div class="client-field-value" id="cr-vat">–</div>
     </div>
 
-    <div class="client-field">
-      <div class="client-field-label">Billing plan</div>
-      <div class="client-field-value" id="cr-plan">–</div>
-    </div>
-
+    <!-- REGISTERED ADDRESS -->
     <div class="client-field client-field--full">
       <div class="client-field-label">Registered address</div>
       <div class="client-field-value client-field-value--multiline" id="cr-registered-address">–</div>
     </div>
 
+    <!-- MAIN CONTACT -->
     <div class="client-field">
       <div class="client-field-label">Main contact</div>
       <div class="client-field-value">
@@ -84,37 +78,16 @@
     </div>
 
     <div class="client-field">
-      <div class="client-field-label">Contact e-mail</div>
-      <div class="client-field-value" id="cr-contact-email">–</div>
-    </div>
-
-    <div class="client-field">
       <div class="client-field-label">Contact phone</div>
       <div class="client-field-value">+32 9 123 45 67</div>
     </div>
 
-    <div class="client-field">
-      <div class="client-field-label">Estimated number of users</div>
-      <div class="client-field-value" id="cr-est-users">–</div>
-    </div>
-
+    <!-- BILLING -->
     <div class="client-field client-field--full">
       <div class="client-field-label">Billing address</div>
       <div class="client-field-value client-field-value--multiline">
         Same as registered address.
       </div>
-    </div>
-
-    <!-- ✅ NEW: Delivery address (read-only) -->
-    <div class="client-field client-field--full">
-      <div class="client-field-label">Delivery address</div>
-      <div class="client-field-value client-field-value--multiline" id="cr-delivery-address">–</div>
-    </div>
-
-    <!-- ✅ NEW: Delivery contact (read-only) -->
-    <div class="client-field">
-      <div class="client-field-label">Delivery contact</div>
-      <div class="client-field-value" id="cr-delivery-contact">–</div>
     </div>
 
     <div class="client-field">
@@ -129,6 +102,18 @@
         <span class="client-field-tag">optional</span>
       </div>
     </div>
+
+    <!-- DELIVERY -->
+    <div class="client-field client-field--full">
+      <div class="client-field-label">Delivery address</div>
+      <div class="client-field-value client-field-value--multiline" id="cr-delivery-address">–</div>
+    </div>
+
+    <div class="client-field">
+      <div class="client-field-label">Delivery contact</div>
+      <div class="client-field-value" id="cr-delivery-contact">–</div>
+    </div>
+
   </div>
 
   <div class="client-footer-row">
@@ -141,7 +126,7 @@
     </a>
   </div>
 
-  <!-- Deactivation modal -->
+  <!-- Deactivation modal blijft ongewijzigd -->
   <div class="modal" id="deactivate-modal" aria-hidden="true">
     <div class="modal-backdrop"></div>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
