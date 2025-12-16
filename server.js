@@ -770,6 +770,74 @@ app.get('/api/company', requireAuth, async (req, res) => {
 });
 
 // =========================================================
+// API: Employees - DELETE (allowed only if no punches exist)
+// =========================================================
+app.delete('/api/employees/:id', requireAuth, async (req, res) => {
+  const employeeId = Number(req.params.id);
+  const companyId = req.auth?.user?.company_id;
+
+  if (!Number.isFinite(employeeId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
+  }
+
+  if (!companyId) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Ensure employee exists in this company (lock the row for race-safety)
+    const emp = await client.query(
+      `SELECT id
+       FROM employees
+       WHERE id = $1 AND company_id = $2
+       FOR UPDATE`,
+      [employeeId, companyId]
+    );
+
+    if (!emp.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Employee not found.' });
+    }
+
+    // Block deletion if at least one punch exists
+    const hasPunch = await client.query(
+      `SELECT 1
+       FROM punches
+       WHERE employee_id = $1 AND company_id = $2
+       LIMIT 1`,
+      [employeeId, companyId]
+    );
+
+    if (hasPunch.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        ok: false,
+        error: 'Employee cannot be deleted after the first scan. Set employee to INACTIVE and create a new employee if needed.'
+      });
+    }
+
+    // Safe to delete (0 punches)
+    await client.query(
+      `DELETE FROM employees
+       WHERE id = $1 AND company_id = $2`,
+      [employeeId, companyId]
+    );
+
+    await client.query('COMMIT');
+    return res.status(204).send();
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('employee delete error:', err);
+    return res.status(500).json({ ok: false, error: 'Server error.' });
+  } finally {
+    client.release();
+  }
+});
+
+// =========================================================
 // Health (DB check)
 // =========================================================
 app.get('/api/health', async (_, res) => {
