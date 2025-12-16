@@ -13,6 +13,7 @@ async function hydrateClientRecord() {
 
     // Company
     set("cr-company-name", c.name);
+    set("cr-customer-number", c.customerNumber);
     set("cr-vat", c.vatNumber);
 
     // Registered address
@@ -69,3 +70,4 @@ async function hydrateClientRecord() {
     console.warn(e);
   }
 }
+

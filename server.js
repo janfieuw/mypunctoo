@@ -140,6 +140,13 @@ function makeCompanyCode(companyName) {
   return `${base || 'COMP'}-${suffix}`;
 }
 
+function formatYYYYMMDD(d = new Date()) {
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}`;
+}
+
 // =========================================================
 // Pricing
 // =========================================================
@@ -426,9 +433,31 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const companyCode = makeCompanyCode(c.name);
 
+    // =========================================================
+    // ✅ CUSTOMER NUMBER (globale teller)
+    // PUN-YYYYMMDD + 9 digits (how manyth customer overall)
+    // =========================================================
+    const yyyymmdd = formatYYYYMMDD(new Date());
+
+    const counterRes = await client.query(
+      `UPDATE customer_number_counter
+       SET last_seq = last_seq + 1
+       WHERE id = 1
+       RETURNING last_seq`
+    );
+
+    if (!counterRes.rows.length) {
+      throw new Error('Customer number counter not initialized.');
+    }
+
+    const globalSeq = counterRes.rows[0].last_seq;
+    const customerNumber = `PUN-${yyyymmdd}${String(globalSeq).padStart(9, '0')}`;
+
     // ✅ Correct insert: alles in eigen kolommen + legacy address fields ook netjes
     const compIns = await client.query(
       `INSERT INTO companies (
+        customer_number,
+
         company_code,
         name,
         vat_number,
@@ -464,18 +493,29 @@ app.post('/api/signup/step3', async (req, res) => {
 
         estimated_user_count
       ) VALUES (
-        $1,$2,$3,
-        $4,
-        $5,$6,
-        $7,$8,$9,$10,$11,
-        $12,$13,$14,$15,$16,
-        $17,$18,$19,$20,$21,
-        $22,$23,
-        $24,$25,
-        $26
+        $1,
+
+        $2,$3,$4,
+        $5,
+
+        $6,$7,
+
+        $8,$9,$10,$11,$12,
+
+        $13,$14,$15,$16,$17,
+
+        $18,$19,$20,$21,$22,
+
+        $23,$24,
+
+        $25,$26,
+
+        $27
       )
       RETURNING id`,
       [
+        customerNumber,
+
         companyCode,
         c.name,
         c.enterpriseNumber || null,
@@ -624,6 +664,8 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
         id,
+        customer_number,
+
         company_code,
         name,
         vat_number,
@@ -668,10 +710,9 @@ app.get('/api/company', requireAuth, async (req, res) => {
 
     if (!rows.length) return res.status(404).json({ ok: false });
 
-    // Extra safeguard: force uppercase for displayed fields
-    // (Email + website blijven lowercase)
     const r = rows[0];
 
+    const customer_number = safeText(r.customer_number);
     const company_code = safeText(r.company_code);
     const name = normalizeUpper(r.name);
     const vat_number = normalizeUpper(r.vat_number);
@@ -705,29 +746,31 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const billing_email = safeText(r.billing_email) ? normalizeLower(r.billing_email) : r.billing_email;
     const billing_reference = normalizeUpper(r.billing_reference);
 
-    // ---- FIX: maak ook het object dat app.js verwacht (camelCase + contact) ----
     const fullContact = safeText(registered_contact_person);
     const parts = fullContact.split(/\s+/).filter(Boolean);
     const firstName = parts.shift() || '';
     const lastName = parts.join(' ') || '';
 
     const company = {
-      // app.js velden (camelCase)
+      // ✅ klantnummer (nieuw)
+      customerNumber: customer_number || '–',
+
+      // bestaande velden
       name,
       code: company_code,
       vatNumber: vat_number,
-      billingPlan: '–', // (nog geen veld in DB)
+
+      billingPlan: '–',
       contact: {
         firstName,
         lastName,
         role: '',
-        email: '' // contact-email bestaat niet in DB; invoiceEmail komt hieronder
+        email: ''
       },
       employeeCount: r.estimated_user_count,
       invoiceEmail: billing_email || '',
       billingReference: billing_reference || '–',
 
-      // geregistreerd adres (app.js toont dit)
       street: registered_street,
       postalCode: registered_postal_code,
       city: registered_city,
@@ -736,16 +779,13 @@ app.get('/api/company', requireAuth, async (req, res) => {
       subscriptionNumber: '–',
       subscriptionStartDate: '–',
 
-      // extra (handig/debug; stoort app.js niet)
       website: website || '',
       registeredContactPerson: registered_contact_person || '',
       deliveryContactPerson: delivery_contact_person || '',
 
-      // legacy/extra address (optioneel)
       registeredAddressText: registered_address || '',
       billingAddressText: billing_address || '',
 
-      // delivery & billing structured (optioneel)
       billing: {
         street: billing_street,
         box: billing_box,
@@ -785,4 +825,3 @@ app.get('/api/health', async (_, res) => {
 app.listen(PORT, () => {
   console.log(`MyPunctoo backend listening on port ${PORT}`);
 });
-
