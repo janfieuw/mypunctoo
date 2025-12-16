@@ -39,23 +39,18 @@ async function loadView(viewName) {
     const response = await fetch(`views/${viewName}.html`, { cache: "no-cache" });
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
-    const mount = document.getElementById("app");
-    if (!mount) throw new Error("Missing #app mount point");
-    mount.innerHTML = html;
+    document.getElementById("app").innerHTML = html;
     initView(viewName);
   } catch (err) {
     console.error(err);
-    const mount = document.getElementById("app");
-    if (mount) {
-      mount.innerHTML = `
-        <section class="card">
-          <h1 class="card-title">Error</h1>
-          <p class="card-text">
-            Could not load view <strong>${escapeHtml(viewName)}</strong>.
-          </p>
-        </section>
-      `;
-    }
+    document.getElementById("app").innerHTML = `
+      <section class="card">
+        <h1 class="card-title">Error</h1>
+        <p class="card-text">
+          Could not load view <strong>${viewName}</strong>.
+        </p>
+      </section>
+    `;
   }
 }
 
@@ -66,7 +61,6 @@ function initTabs() {
     btn.addEventListener("click", () => {
       const target = btn.dataset.view;
 
-      // ✅ Alleen knoppen met data-view zijn tabs
       if (!target) return;
 
       buttons.forEach((b) => {
@@ -79,10 +73,6 @@ function initTabs() {
   });
 }
 
-/* ------------------------------
-   Logout
---------------------------------*/
-
 function initLogout() {
   const btn = document.getElementById("logoutBtn");
   if (!btn) return;
@@ -90,17 +80,11 @@ function initLogout() {
   btn.addEventListener("click", async () => {
     try {
       await apiFetch("/api/logout", { method: "POST" });
-    } catch {
-      // ignore
-    }
+    } catch {}
     try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
     window.location.href = "/login";
   });
 }
-
-/* ------------------------------
-   Subscription status helpers
---------------------------------*/
 
 function loadSubscriptionStatus() {
   try {
@@ -199,33 +183,25 @@ function initSubscriptionControls() {
   }
 }
 
-/* ------------------------------
-   View initialisation
---------------------------------*/
-
 function initView(viewName) {
   applySubscriptionStatus(loadSubscriptionStatus());
 
   if (viewName === "client-record") {
     initSubscriptionControls();
-    hydrateClientRecord();
-    return;
   }
 
   if (viewName === "dashboard") {
     hydrateDashboard();
-    return;
+  }
+
+  if (viewName === "client-record") {
+    hydrateClientRecord();
   }
 
   if (viewName === "users") {
     hydrateUsers();
-    return;
   }
 }
-
-/* ------------------------------
-   Bootstrapping
---------------------------------*/
 
 document.addEventListener("DOMContentLoaded", () => {
   (async () => {
@@ -234,15 +210,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     initTabs();
     initLogout();
-
-    // ✅ Dit is wat je nu mist wanneer app.js per ongeluk “ingekort” werd.
     loadView("dashboard");
   })();
 });
-
-/* ------------------------------
-   View hydration (API → UI)
---------------------------------*/
 
 async function hydrateDashboard() {
   try {
@@ -259,7 +229,6 @@ async function hydrateDashboard() {
     if (elActive) elActive.textContent = String(s.employeesActive ?? "–");
     if (elCheckins) elCheckins.textContent = String(s.checkinsToday ?? "–");
   } catch (e) {
-    // dashboard mag niet leeg worden hierdoor
     console.warn(e);
   }
 }
@@ -282,16 +251,16 @@ async function hydrateClientRecord() {
     set("cr-vat", c.vatNumber);
 
     // Registered address
-    const regAddr = [
+    const regAddrLines = [
       c.street,
       `${c.postalCode || ""} ${c.city || ""}`.trim(),
       c.country
-    ].filter(Boolean).join("\n");
+    ].filter(Boolean);
 
     const regEl = document.getElementById("cr-registered-address");
     if (regEl) {
-      regEl.innerHTML = regAddr
-        ? regAddr.split("\n").map(l => `${escapeHtml(l)}<br>`).join("")
+      regEl.innerHTML = regAddrLines.length
+        ? regAddrLines.map(l => `${escapeHtml(l)}<br>`).join("")
         : "–";
     }
 
@@ -302,20 +271,22 @@ async function hydrateClientRecord() {
     set("cr-invoice-email", c.invoiceEmail || "");
     set("cr-billing-ref", c.billingReference || "–");
 
-    // Delivery (alleen als de velden bestaan in de view)
-    const delAddr = [
-      c.delivery?.street,
-      `${c.delivery?.postalCode || ""} ${c.delivery?.city || ""}`.trim(),
-      c.delivery?.country
-    ].filter(Boolean).join("\n");
+    // ✅ Delivery address: ALWAYS show an address (API guarantees it, but we keep UI fallback too)
+    const del = c.delivery || {};
+    const delAddrLines = [
+      del.street || c.street,
+      `${del.postalCode || c.postalCode || ""} ${del.city || c.city || ""}`.trim(),
+      del.country || c.country
+    ].filter(Boolean);
 
     const delAddrEl = document.getElementById("cr-delivery-address");
     if (delAddrEl) {
-      delAddrEl.innerHTML = delAddr
-        ? delAddr.split("\n").map(l => `${escapeHtml(l)}<br>`).join("")
-        : "Same as registered address.";
+      delAddrEl.innerHTML = delAddrLines.length
+        ? delAddrLines.map(l => `${escapeHtml(l)}<br>`).join("")
+        : "–";
     }
 
+    // Delivery contact (always fallback)
     set("cr-delivery-contact", c.deliveryContactPerson || c.registeredContactPerson || "–");
 
     // Subscription meta
@@ -367,4 +338,3 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-

@@ -147,6 +147,14 @@ function formatYYYYMMDD(d = new Date()) {
   return `${yyyy}${mm}${dd}`;
 }
 
+function firstNonEmpty(...vals) {
+  for (const v of vals) {
+    const t = safeText(v);
+    if (t) return t;
+  }
+  return '';
+}
+
 // =========================================================
 // Pricing
 // =========================================================
@@ -412,15 +420,6 @@ app.post('/api/signup/step3', async (req, res) => {
     // Delivery (structured; if not different => mirror registered)
     const del = c.delivery ? c.delivery : c.registered;
 
-    const delLine = buildAddressLineFromFields(
-      del.street,
-      del.box,
-      del.postalCode,
-      del.city,
-      del.countryCode
-    );
-
-    // Billing (geen aparte billing velden in signup => mirror registered)
     const bill = c.registered;
 
     const billLine = buildAddressLineFromFields(
@@ -435,7 +434,6 @@ app.post('/api/signup/step3', async (req, res) => {
 
     // =========================================================
     // ✅ CUSTOMER NUMBER (globale teller)
-    // PUN-YYYYMMDD + 9 digits (how manyth customer overall)
     // =========================================================
     const yyyymmdd = formatYYYYMMDD(new Date());
 
@@ -453,7 +451,6 @@ app.post('/api/signup/step3', async (req, res) => {
     const globalSeq = counterRes.rows[0].last_seq;
     const customerNumber = `PUN-${yyyymmdd}${String(globalSeq).padStart(9, '0')}`;
 
-    // ✅ Correct insert: alles in eigen kolommen + legacy address fields ook netjes
     const compIns = await client.query(
       `INSERT INTO companies (
         customer_number,
@@ -537,6 +534,7 @@ app.post('/api/signup/step3', async (req, res) => {
         bill.city || null,
         bill.countryCode || null,
 
+        // ✅ delivery ALTIJD ingevuld: ofwel delivery uit form, ofwel mirror registered
         del.street || null,
         del.box || null,
         del.postalCode || null,
@@ -546,8 +544,8 @@ app.post('/api/signup/step3', async (req, res) => {
         regLine || null,
         billLine || null,
 
-        c.billing?.email || null,      // lowercase
-        c.billing?.reference || null,  // uppercase
+        c.billing?.email || null,
+        c.billing?.reference || null,
 
         1
       ]
@@ -555,7 +553,6 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const companyId = compIns.rows[0].id;
 
-    // Create user linked to company
     const userIns = await client.query(
       `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id)
        VALUES ($1,$2,'customer_admin', true, $3)
@@ -567,7 +564,6 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // end signup session
     signupTokens.delete(signup_token);
 
     res.json({
@@ -681,20 +677,11 @@ app.get('/api/company', requireAuth, async (req, res) => {
         registered_city,
         registered_country_code,
 
-        billing_street,
-        billing_box,
-        billing_postal_code,
-        billing_city,
-        billing_country_code,
-
         delivery_street,
         delivery_box,
         delivery_postal_code,
         delivery_city,
         delivery_country_code,
-
-        registered_address,
-        billing_address,
 
         billing_email,
         billing_reference,
@@ -712,94 +699,67 @@ app.get('/api/company', requireAuth, async (req, res) => {
 
     const r = rows[0];
 
-    const customer_number = safeText(r.customer_number);
-    const company_code = safeText(r.company_code);
-    const name = normalizeUpper(r.name);
-    const vat_number = normalizeUpper(r.vat_number);
+    // Registered (upper)
+    const regStreet = normalizeUpper(r.registered_street);
+    const regBox = normalizeUpper(r.registered_box);
+    const regPostal = normalizeUpper(r.registered_postal_code);
+    const regCity = normalizeUpper(r.registered_city);
+    const regCountry = normalizeUpper(r.registered_country_code);
+
+    // Delivery raw (upper) - may be empty for older records
+    const delStreetRaw = normalizeUpper(r.delivery_street);
+    const delBoxRaw = normalizeUpper(r.delivery_box);
+    const delPostalRaw = normalizeUpper(r.delivery_postal_code);
+    const delCityRaw = normalizeUpper(r.delivery_city);
+    const delCountryRaw = normalizeUpper(r.delivery_country_code);
+
+    // ✅ Delivery ALWAYS: field-by-field fallback to registered
+    const delStreet = firstNonEmpty(delStreetRaw, regStreet);
+    const delBox = firstNonEmpty(delBoxRaw, regBox);
+    const delPostal = firstNonEmpty(delPostalRaw, regPostal);
+    const delCity = firstNonEmpty(delCityRaw, regCity);
+    const delCountry = firstNonEmpty(delCountryRaw, regCountry);
 
     const registered_contact_person = normalizeUpper(r.registered_contact_person);
     const delivery_contact_person = normalizeUpper(r.delivery_contact_person);
 
-    const website = safeText(r.website) ? normalizeLower(r.website) : r.website;
-
-    const registered_street = normalizeUpper(r.registered_street);
-    const registered_box = normalizeUpper(r.registered_box);
-    const registered_postal_code = normalizeUpper(r.registered_postal_code);
-    const registered_city = normalizeUpper(r.registered_city);
-    const registered_country_code = normalizeUpper(r.registered_country_code);
-
-    const billing_street = normalizeUpper(r.billing_street);
-    const billing_box = normalizeUpper(r.billing_box);
-    const billing_postal_code = normalizeUpper(r.billing_postal_code);
-    const billing_city = normalizeUpper(r.billing_city);
-    const billing_country_code = normalizeUpper(r.billing_country_code);
-
-    const delivery_street = normalizeUpper(r.delivery_street);
-    const delivery_box = normalizeUpper(r.delivery_box);
-    const delivery_postal_code = normalizeUpper(r.delivery_postal_code);
-    const delivery_city = normalizeUpper(r.delivery_city);
-    const delivery_country_code = normalizeUpper(r.delivery_country_code);
-
-    const registered_address = normalizeUpper(r.registered_address);
-    const billing_address = normalizeUpper(r.billing_address);
-
-    const billing_email = safeText(r.billing_email) ? normalizeLower(r.billing_email) : r.billing_email;
-    const billing_reference = normalizeUpper(r.billing_reference);
-
-    const fullContact = safeText(registered_contact_person);
-    const parts = fullContact.split(/\s+/).filter(Boolean);
+    const contactName = safeText(registered_contact_person);
+    const parts = contactName.split(/\s+/).filter(Boolean);
     const firstName = parts.shift() || '';
     const lastName = parts.join(' ') || '';
 
     const company = {
-      // ✅ klantnummer (nieuw)
-      customerNumber: customer_number || '–',
+      customerNumber: safeText(r.customer_number) || '–',
 
-      // bestaande velden
-      name,
-      code: company_code,
-      vatNumber: vat_number,
+      name: normalizeUpper(r.name),
+      vatNumber: normalizeUpper(r.vat_number),
 
-      billingPlan: '–',
-      contact: {
-        firstName,
-        lastName,
-        role: '',
-        email: ''
+      contact: { firstName, lastName, role: '', email: '' },
+
+      invoiceEmail: safeText(r.billing_email) ? normalizeLower(r.billing_email) : '',
+      billingReference: normalizeUpper(r.billing_reference) || '–',
+
+      // registered (for display)
+      street: regStreet,
+      postalCode: regPostal,
+      city: regCity,
+      country: regCountry,
+
+      // ✅ delivery ALWAYS present
+      delivery: {
+        street: delStreet,
+        box: delBox,
+        postalCode: delPostal,
+        city: delCity,
+        country: delCountry
       },
-      employeeCount: r.estimated_user_count,
-      invoiceEmail: billing_email || '',
-      billingReference: billing_reference || '–',
 
-      street: registered_street,
-      postalCode: registered_postal_code,
-      city: registered_city,
-      country: registered_country_code,
+      // ✅ delivery contact ALWAYS: fallback to registered contact
+      registeredContactPerson: registered_contact_person || '',
+      deliveryContactPerson: safeText(delivery_contact_person) ? delivery_contact_person : (registered_contact_person || ''),
 
       subscriptionNumber: '–',
-      subscriptionStartDate: '–',
-
-      website: website || '',
-      registeredContactPerson: registered_contact_person || '',
-      deliveryContactPerson: delivery_contact_person || '',
-
-      registeredAddressText: registered_address || '',
-      billingAddressText: billing_address || '',
-
-      billing: {
-        street: billing_street,
-        box: billing_box,
-        postalCode: billing_postal_code,
-        city: billing_city,
-        country: billing_country_code
-      },
-      delivery: {
-        street: delivery_street,
-        box: delivery_box,
-        postalCode: delivery_postal_code,
-        city: delivery_city,
-        country: delivery_country_code
-      }
+      subscriptionStartDate: '–'
     };
 
     res.json({ ok: true, company });
