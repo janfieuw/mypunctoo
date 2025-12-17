@@ -1007,6 +1007,47 @@ app.delete('/api/employees/:id', requireAuth, async (req, res) => {
 });
 
 // =========================================================
+// API: Stats (Dashboard)
+// =========================================================
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    if (!companyId) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int
+            FROM employees e
+           WHERE e.company_id = $1) AS employees_total,
+         (SELECT COUNT(*)::int
+            FROM employees e
+           WHERE e.company_id = $1
+             AND e.status = 'active') AS employees_active,
+         (SELECT COUNT(*)::int
+            FROM punches p
+           WHERE p.company_id = $1
+             AND p.punched_at::date = CURRENT_DATE) AS checkins_today`,
+      [companyId]
+    );
+
+    const r = rows[0] || {};
+    return res.json({
+      ok: true,
+      stats: {
+        employeesTotal: r.employees_total ?? 0,
+        employeesActive: r.employees_active ?? 0,
+        checkinsToday: r.checkins_today ?? 0
+      }
+    });
+  } catch (err) {
+    console.error('stats error:', err);
+    return res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
 // Health (DB check)
 // =========================================================
 app.get('/api/health', async (_, res) => {
