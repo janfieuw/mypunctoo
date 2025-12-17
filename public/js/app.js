@@ -300,33 +300,218 @@ async function hydrateClientRecord() {
   }
 }
 
+function usersSetError(msg) {
+  const el = document.getElementById("users-error");
+  if (!el) return;
+  el.textContent = msg ? String(msg) : "";
+}
+
+function normalizeUpper(str) {
+  return String(str || "").trim().toUpperCase();
+}
+
+function normalizeLower(str) {
+  return String(str || "").trim().toLowerCase();
+}
+
+function formatDateISO(d) {
+  if (!d) return "";
+  // API returns start_date as "YYYY-MM-DD..." (date or ISO)
+  const s = String(d);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+function statusLabel(status) {
+  const s = normalizeLower(status);
+  if (s === "inactive") return "INACTIVE";
+  return "ACTIVE";
+}
+
+function statusBadgeClass(status) {
+  const s = normalizeLower(status);
+  return s === "inactive" ? "badge badge--inactive" : "badge badge--active";
+}
+
+async function usersFetchEmployees() {
+  const res = await apiFetch("/api/employees", { cache: "no-cache" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not load employees");
+  return data.employees || [];
+}
+
+async function usersRenderEmployees() {
+  const tbody = document.getElementById("users-tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="6" class="table-empty">Loading…</td></tr>`;
+
+  const employees = await usersFetchEmployees();
+
+  if (!employees.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="table-empty">No users yet.</td></tr>`;
+    return;
+  }
+
+  const rows = employees.map((e) => {
+    const id = e.id;
+    const code = e.employee_code || "";
+    const fullName = `${e.first_name || ""} ${e.last_name || ""}`.trim();
+
+    const start = formatDateISO(e.start_date) || "–";
+    const end = formatDateISO(e.end_date) || "–";
+
+    const hasPunches = !!e.has_punches;
+    const isInactive = normalizeLower(e.status) === "inactive";
+
+    const toggleLabel = isInactive ? "SET ACTIVE" : "SET INACTIVE";
+
+    // Delete is only allowed when there are NO punches
+    const deleteBtn = hasPunches
+      ? `<button class="users-btn users-btn--disabled" type="button" disabled title="Not allowed after first scan.">DELETE</button>`
+      : `<button class="users-btn users-btn--danger" type="button" data-action="delete" data-id="${escapeHtml(id)}">DELETE</button>`;
+
+    const toggleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="toggle" data-id="${escapeHtml(id)}" data-next="${escapeHtml(isInactive ? "active" : "inactive")}">${escapeHtml(toggleLabel)}</button>`;
+
+    const actions = `<div class="users-actions">${toggleBtn}${deleteBtn}</div>`;
+
+    return `
+      <tr>
+        <td>${escapeHtml(code)}</td>
+        <td>${escapeHtml(fullName)}</td>
+        <td><span class="${escapeHtml(statusBadgeClass(e.status))}">${escapeHtml(statusLabel(e.status))}</span></td>
+        <td>${escapeHtml(start)}</td>
+        <td>${escapeHtml(end)}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = rows.join("");
+
+  // Attach click handlers (event delegation)
+  tbody.onclick = async (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest("button[data-action]");
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+
+    if (!id) return;
+
+    usersSetError("");
+
+    try {
+      if (action === "toggle") {
+        const next = btn.dataset.next || "";
+        btn.disabled = true;
+
+        const r = await apiFetch(`/api/employees/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: next })
+        });
+
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || "Could not update status");
+
+        await usersRenderEmployees();
+        return;
+      }
+
+      if (action === "delete") {
+        const ok = window.confirm("Delete this employee? This is only allowed if there are no scans yet.");
+        if (!ok) return;
+
+        btn.disabled = true;
+
+        const r = await apiFetch(`/api/employees/${id}`, { method: "DELETE" });
+
+        if (r.status === 204) {
+          await usersRenderEmployees();
+          return;
+        }
+
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || "Could not delete employee");
+      }
+    } catch (err) {
+      console.warn(err);
+      usersSetError(err?.message || "Something went wrong.");
+      btn.disabled = false;
+    }
+  };
+}
+
 async function hydrateUsers() {
   try {
-    const res = await apiFetch("/api/employees", { cache: "no-cache" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load users");
+    usersSetError("");
 
-    const tbody = document.getElementById("users-tbody");
-    if (!tbody) return;
+    // Default start date = today
+    const startEl = document.getElementById("emp-startdate");
+    if (startEl && !startEl.value) {
+      startEl.value = new Date().toISOString().slice(0, 10);
+    }
 
-    const rows = (data.employees || []).map((u) => {
-      const end = u.endDate ? escapeHtml(u.endDate) : "–";
-      return `
-        <tr>
-          <td>${escapeHtml(u.id)}</td>
-          <td>${escapeHtml(`${u.firstName} ${u.lastName}`)}</td>
-          <td>${escapeHtml(u.status)}</td>
-          <td>${escapeHtml(u.startDate || "–")}</td>
-          <td>${end}</td>
-        </tr>
-      `;
-    });
+    // Create form handler
+    const form = document.getElementById("employee-create-form");
+    if (form) {
+      form.onsubmit = async (ev) => {
+        ev.preventDefault();
+        usersSetError("");
 
-    tbody.innerHTML = rows.join("") || `
-      <tr><td colspan="5" class="table-empty">No users yet.</td></tr>
-    `;
+        const codeEl = document.getElementById("emp-code");
+        const firstEl = document.getElementById("emp-first");
+        const lastEl = document.getElementById("emp-last");
+        const sdEl = document.getElementById("emp-startdate");
+
+        const employee_code = normalizeUpper(codeEl?.value);
+        const first_name = normalizeUpper(firstEl?.value);
+        const last_name = normalizeUpper(lastEl?.value);
+        const start_date = String(sdEl?.value || "").trim();
+
+        if (!employee_code || !first_name || !last_name || !start_date) {
+          usersSetError("Please fill in EMPLOYEE CODE, FIRST NAME, LAST NAME and START DATE.");
+          return;
+        }
+
+        const btn = document.getElementById("employee-create-btn");
+        if (btn) btn.disabled = true;
+
+        try {
+          const r = await apiFetch("/api/employees", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              employee_code,
+              first_name,
+              last_name,
+              start_date,
+              status: "active"
+            })
+          });
+
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) throw new Error(j.error || "Could not create employee");
+
+          // reset (keep start date)
+          if (codeEl) codeEl.value = "";
+          if (firstEl) firstEl.value = "";
+          if (lastEl) lastEl.value = "";
+
+          await usersRenderEmployees();
+        } catch (err) {
+          console.warn(err);
+          usersSetError(err?.message || "Something went wrong.");
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      };
+    }
+
+    await usersRenderEmployees();
   } catch (e) {
     console.warn(e);
+    usersSetError(e?.message || "Could not load users.");
   }
 }
 
