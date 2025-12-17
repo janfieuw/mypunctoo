@@ -36,7 +36,8 @@ async function requireSessionOrRedirect() {
 
 async function loadView(viewName) {
   try {
-    const response = await fetch(`views/${viewName}.html`, { cache: "no-cache" });
+    // ✅ IMPORTANT: absolute path so it works from /app as well
+    const response = await fetch(`/views/${viewName}.html`, { cache: "no-cache" });
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
     document.getElementById("app").innerHTML = html;
@@ -312,7 +313,6 @@ function devicesSetError(msg) {
   el.textContent = msg ? String(msg) : "";
 }
 
-
 function normalizeUpper(str) {
   return String(str || "").trim().toUpperCase();
 }
@@ -422,9 +422,8 @@ async function usersRenderEmployees() {
         if (!r.ok || !j.ok) throw new Error(j.error || "Could not update status");
 
         await usersRenderEmployees();
-        
-    await devicesRenderBindings();
-return;
+        await devicesRenderBindings();
+        return;
       }
 
       if (action === "delete") {
@@ -450,7 +449,6 @@ return;
     }
   };
 }
-
 
 async function devicesFetchBindings() {
   const res = await apiFetch("/api/devices", { cache: "no-cache" });
@@ -536,10 +534,9 @@ async function devicesRenderBindings() {
 async function hydrateUsers() {
   try {
     usersSetError("");
+    devicesSetError("");
 
-    
-    devicesSetError(\"\");
-// Default start date = today
+    // Default start date = today
     const startEl = document.getElementById("emp-startdate");
     if (startEl && !startEl.value) {
       startEl.value = new Date().toISOString().slice(0, 10);
@@ -592,6 +589,7 @@ async function hydrateUsers() {
           if (lastEl) lastEl.value = "";
 
           await usersRenderEmployees();
+          await devicesRenderBindings();
         } catch (err) {
           console.warn(err);
           usersSetError(err?.message || "Something went wrong.");
@@ -602,6 +600,7 @@ async function hydrateUsers() {
     }
 
     await usersRenderEmployees();
+    await devicesRenderBindings();
   } catch (e) {
     console.warn(e);
     usersSetError(e?.message || "Could not load users.");
