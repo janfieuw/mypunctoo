@@ -770,6 +770,175 @@ app.get('/api/company', requireAuth, async (req, res) => {
 });
 
 // =========================================================
+// API: Employees - LIST (includes has_punches for UI rules)
+// =========================================================
+app.get('/api/employees', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+    const { rows } = await pool.query(
+      `SELECT
+         e.id,
+         e.company_id,
+         e.employee_code,
+         e.first_name,
+         e.last_name,
+         e.email,
+         e.phone,
+         e.start_date,
+         e.end_date,
+         e.status,
+         e.created_at,
+         e.updated_at,
+         EXISTS (
+           SELECT 1
+           FROM punches p
+           WHERE p.employee_id = e.id
+             AND p.company_id = e.company_id
+           LIMIT 1
+         ) AS has_punches
+       FROM employees e
+       WHERE e.company_id = $1
+       ORDER BY e.last_name ASC, e.first_name ASC, e.id ASC`,
+      [companyId]
+    );
+
+    res.json({ ok: true, employees: rows });
+  } catch (err) {
+    console.error('employees list error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
+// API: Employees - CREATE (status must be 'active'/'inactive' lowercase)
+// =========================================================
+app.post('/api/employees', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+    const employee_code = normalizeUpper(req.body?.employee_code || '');
+    const first_name = normalizeUpper(req.body?.first_name || '');
+    const last_name = normalizeUpper(req.body?.last_name || '');
+    const email = safeText(req.body?.email) ? normalizeLower(req.body?.email) : null;
+    const phone = safeText(req.body?.phone) ? safeText(req.body?.phone) : null;
+
+    // start_date is NOT NULL in your DB
+    const start_date = safeText(req.body?.start_date) || null;
+
+    // DB constraint expects lowercase values
+    const statusRaw = safeText(req.body?.status) || 'active';
+    const status = normalizeLower(statusRaw);
+
+    if (!employee_code || !first_name || !last_name) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    }
+
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ ok: false, error: "Invalid status. Use 'active' or 'inactive'." });
+    }
+
+    // start_date fallback: today
+    const startDateValue = start_date ? start_date : new Date().toISOString().slice(0, 10);
+
+    const { rows } = await pool.query(
+      `INSERT INTO employees (
+         company_id,
+         employee_code,
+         first_name,
+         last_name,
+         email,
+         phone,
+         start_date,
+         end_date,
+         status,
+         created_at,
+         updated_at
+       )
+       VALUES (
+         $1,$2,$3,$4,$5,$6,$7,NULL,$8,NOW(),NOW()
+       )
+       RETURNING
+         id,
+         company_id,
+         employee_code,
+         first_name,
+         last_name,
+         email,
+         phone,
+         start_date,
+         end_date,
+         status,
+         created_at,
+         updated_at`,
+      [companyId, employee_code, first_name, last_name, email, phone, startDateValue, status]
+    );
+
+    res.status(201).json({ ok: true, employee: rows[0] });
+  } catch (err) {
+    console.error('employee create error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
+// API: Employees - STATUS (Set inactive / reactivate)
+// =========================================================
+app.patch('/api/employees/:id/status', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    const employeeId = Number(req.params.id);
+
+    if (!Number.isFinite(employeeId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
+    }
+
+    if (!companyId) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+
+    // IMPORTANT: DB constraint expects 'active'/'inactive' (lowercase)
+    const nextStatus = normalizeLower(req.body?.status || '');
+    if (!['active', 'inactive'].includes(nextStatus)) {
+      return res.status(400).json({ ok: false, error: "Invalid status. Use 'active' or 'inactive'." });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE employees
+         SET status = $1,
+             updated_at = NOW()
+       WHERE id = $2
+         AND company_id = $3
+       RETURNING
+         id,
+         company_id,
+         employee_code,
+         first_name,
+         last_name,
+         email,
+         phone,
+         start_date,
+         end_date,
+         status,
+         created_at,
+         updated_at`,
+      [nextStatus, employeeId, companyId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: 'Employee not found.' });
+    }
+
+    res.json({ ok: true, employee: rows[0] });
+  } catch (err) {
+    console.error('employee status update error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
 // API: Employees - DELETE (allowed only if no punches exist)
 // =========================================================
 app.delete('/api/employees/:id', requireAuth, async (req, res) => {
