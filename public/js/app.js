@@ -306,6 +306,13 @@ function usersSetError(msg) {
   el.textContent = msg ? String(msg) : "";
 }
 
+function devicesSetError(msg) {
+  const el = document.getElementById("devices-error");
+  if (!el) return;
+  el.textContent = msg ? String(msg) : "";
+}
+
+
 function normalizeUpper(str) {
   return String(str || "").trim().toUpperCase();
 }
@@ -415,7 +422,9 @@ async function usersRenderEmployees() {
         if (!r.ok || !j.ok) throw new Error(j.error || "Could not update status");
 
         await usersRenderEmployees();
-        return;
+        
+    await devicesRenderBindings();
+return;
       }
 
       if (action === "delete") {
@@ -442,11 +451,95 @@ async function usersRenderEmployees() {
   };
 }
 
+
+async function devicesFetchBindings() {
+  const res = await apiFetch("/api/devices", { cache: "no-cache" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not load devices");
+  return data.devices || [];
+}
+
+function formatDateTime(dt) {
+  if (!dt) return "–";
+  try {
+    const d = new Date(dt);
+    if (Number.isNaN(d.getTime())) return "–";
+    return d.toLocaleString();
+  } catch {
+    return "–";
+  }
+}
+
+async function devicesRenderBindings() {
+  const tbody = document.getElementById("devices-tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Loading…</td></tr>`;
+
+  const bindings = await devicesFetchBindings();
+
+  if (!bindings.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">No device links yet.</td></tr>`;
+    return;
+  }
+
+  const rows = bindings.map((b) => {
+    const deviceId = b.device_id || "";
+    const code = b.employee_code || "";
+    const fullName = `${b.first_name || ""} ${b.last_name || ""}`.trim();
+    const lastSeen = formatDateTime(b.last_seen_at);
+
+    return `
+      <tr>
+        <td>${escapeHtml(deviceId)}</td>
+        <td>${escapeHtml(code)}</td>
+        <td>${escapeHtml(fullName)}</td>
+        <td>${escapeHtml(lastSeen)}</td>
+        <td>
+          <button class="users-btn users-btn--danger" type="button" data-action="unlink" data-device="${escapeHtml(deviceId)}">
+            UNLINK
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = rows.join("");
+
+  tbody.onclick = async (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest("button[data-action='unlink']");
+    if (!btn) return;
+
+    const deviceId = btn.dataset.device || "";
+    if (!deviceId) return;
+
+    devicesSetError("");
+
+    const ok = window.confirm("Unlink this device? The next scan on this phone will ask for an employee code again.");
+    if (!ok) return;
+
+    btn.disabled = true;
+
+    try {
+      const r = await apiFetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || "Could not unlink device");
+      await devicesRenderBindings();
+    } catch (err) {
+      console.warn(err);
+      devicesSetError(err?.message || "Something went wrong.");
+      btn.disabled = false;
+    }
+  };
+}
+
 async function hydrateUsers() {
   try {
     usersSetError("");
 
-    // Default start date = today
+    
+    devicesSetError(\"\");
+// Default start date = today
     const startEl = document.getElementById("emp-startdate");
     if (startEl && !startEl.value) {
       startEl.value = new Date().toISOString().slice(0, 10);

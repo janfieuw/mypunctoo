@@ -1007,6 +1007,64 @@ app.delete('/api/employees/:id', requireAuth, async (req, res) => {
 });
 
 // =========================================================
+// API: Device bindings - LIST (Dashboard)
+// =========================================================
+app.get('/api/devices', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+    const { rows } = await pool.query(
+      `SELECT
+         db.device_id,
+         db.employee_id,
+         db.created_at,
+         db.last_seen_at,
+         e.employee_code,
+         e.first_name,
+         e.last_name
+       FROM device_bindings db
+       JOIN employees e
+         ON e.id = db.employee_id
+        AND e.company_id = db.company_id
+       WHERE db.company_id = $1
+       ORDER BY db.last_seen_at DESC, db.created_at DESC`,
+      [companyId]
+    );
+
+    res.json({ ok: true, devices: rows });
+  } catch (err) {
+    console.error('devices list error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
+// API: Device bindings - UNLINK (Koppeling wissen)
+// =========================================================
+app.delete('/api/devices/:deviceId', requireAuth, async (req, res) => {
+  try {
+    const companyId = req.auth.user.company_id;
+    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+    const deviceId = safeText(req.params.deviceId);
+    if (!deviceId) return res.status(400).json({ ok: false, error: 'Missing device id.' });
+
+    const r = await pool.query(
+      `DELETE FROM device_bindings
+       WHERE company_id = $1
+         AND device_id = $2`,
+      [companyId, deviceId]
+    );
+
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) {
+    console.error('device unlink error:', err);
+    res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
+
+// =========================================================
 // API: Stats (Dashboard)
 // =========================================================
 app.get('/api/stats', requireAuth, async (req, res) => {

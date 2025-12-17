@@ -1,7 +1,7 @@
 <section class="card">
-  <h1 class="card-title">Users</h1>
+  <h1 class="card-title">Employees</h1>
   <p class="card-text">
-    Manage the employees of your company. Each user has an employee code, start and end date,
+    Manage the employees of your company. Each employee has an employee code, start and end date,
     and an active / inactive status.
   </p>
 
@@ -53,6 +53,33 @@
     <tbody id="users-tbody">
       <tr>
         <td colspan="6" class="table-empty">Loading…</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h1 class="card-title">Device links</h1>
+  <p class="card-text">
+    This overview shows which work device is currently linked to which employee.
+    Use <strong>UNLINK</strong> when a phone is handed over to another employee.
+  </p>
+
+  <p id="devices-error" class="users-error" aria-live="polite"></p>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Employee code</th>
+        <th>Name</th>
+        <th>Last seen</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="devices-tbody">
+      <tr>
+        <td colspan="5" class="table-empty">Loading…</td>
       </tr>
     </tbody>
   </table>
