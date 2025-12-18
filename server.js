@@ -911,6 +911,7 @@ app.get('/api/employees', requireAuth, async (req, res) => {
 // =========================================================
 // API: Employees - CREATE
 // ✅ employee_no + employee_code are AUTO
+// ✅ start_date is AUTO (today) - no longer required from UI
 // =========================================================
 app.post('/api/employees', requireAuth, async (req, res) => {
   const client = await pool.connect();
@@ -920,26 +921,16 @@ app.post('/api/employees', requireAuth, async (req, res) => {
 
     const first_name = normalizeUpper(req.body?.first_name || '');
     const last_name = normalizeUpper(req.body?.last_name || '');
-    const email = safeText(req.body?.email) ? normalizeLower(req.body?.email) : null;
-    const phone = safeText(req.body?.phone) ? safeText(req.body?.phone) : null;
-
-    // start_date is NOT NULL in your DB
-    const start_date = safeText(req.body?.start_date) || null;
-
-    // DB constraint expects lowercase values
-    const statusRaw = safeText(req.body?.status) || 'active';
-    const status = normalizeLower(statusRaw);
 
     if (!first_name || !last_name) {
       return res.status(400).json({ ok: false, error: 'Missing required fields.' });
     }
 
-    if (!['active', 'inactive'].includes(status)) {
-      return res.status(400).json({ ok: false, error: "Invalid status. Use 'active' or 'inactive'." });
-    }
+    // Always default to active on create (UI does not need to send status)
+    const status = 'active';
 
-    // start_date fallback: today
-    const startDateValue = start_date ? start_date : new Date().toISOString().slice(0, 10);
+    // start_date fallback: today (UI does not send start_date)
+    const startDateValue = new Date().toISOString().slice(0, 10);
 
     await client.query('BEGIN');
 
@@ -961,7 +952,7 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          updated_at
        )
        VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,NOW(),NOW()
+         $1,$2,$3,$4,$5,NULL,NULL,$6,NULL,$7,NOW(),NOW()
        )
        RETURNING
          id,
@@ -977,7 +968,7 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          status,
          created_at,
          updated_at`,
-      [companyId, employeeNo, employeeCode, first_name, last_name, email, phone, startDateValue, status]
+      [companyId, employeeNo, employeeCode, first_name, last_name, startDateValue, status]
     );
 
     await client.query('COMMIT');

@@ -323,7 +323,7 @@ function normalizeLower(str) {
 
 function formatDateISO(d) {
   if (!d) return "";
-  // API returns start_date as "YYYY-MM-DD..." (date or ISO)
+  // API returns dates as "YYYY-MM-DD..." (date or ISO)
   const s = String(d);
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
@@ -350,12 +350,12 @@ async function usersRenderEmployees() {
   const tbody = document.getElementById("users-tbody");
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="6" class="table-empty">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Loading…</td></tr>`;
 
   const employees = await usersFetchEmployees();
 
   if (!employees.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="table-empty">No users yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">No employees yet.</td></tr>`;
     return;
   }
 
@@ -364,8 +364,8 @@ async function usersRenderEmployees() {
     const code = e.employee_code || "";
     const fullName = `${e.first_name || ""} ${e.last_name || ""}`.trim();
 
-    const start = formatDateISO(e.start_date) || "–";
-    const end = formatDateISO(e.end_date) || "–";
+    // Creation date is automatic -> show created_at
+    const created = formatDateISO(e.created_at) || "–";
 
     const hasPunches = !!e.has_punches;
     const isInactive = normalizeLower(e.status) === "inactive";
@@ -386,8 +386,7 @@ async function usersRenderEmployees() {
         <td>${escapeHtml(code)}</td>
         <td>${escapeHtml(fullName)}</td>
         <td><span class="${escapeHtml(statusBadgeClass(e.status))}">${escapeHtml(statusLabel(e.status))}</span></td>
-        <td>${escapeHtml(start)}</td>
-        <td>${escapeHtml(end)}</td>
+        <td>${escapeHtml(created)}</td>
         <td>${actions}</td>
       </tr>
     `;
@@ -536,12 +535,6 @@ async function hydrateUsers() {
     usersSetError("");
     devicesSetError("");
 
-    // Default start date = today
-    const startEl = document.getElementById("emp-startdate");
-    if (startEl && !startEl.value) {
-      startEl.value = new Date().toISOString().slice(0, 10);
-    }
-
     // Create form handler
     const form = document.getElementById("employee-create-form");
     if (form) {
@@ -549,18 +542,14 @@ async function hydrateUsers() {
         ev.preventDefault();
         usersSetError("");
 
-        const codeEl = document.getElementById("emp-code");
         const firstEl = document.getElementById("emp-first");
         const lastEl = document.getElementById("emp-last");
-        const sdEl = document.getElementById("emp-startdate");
 
-        const employee_code = normalizeUpper(codeEl?.value);
         const first_name = normalizeUpper(firstEl?.value);
         const last_name = normalizeUpper(lastEl?.value);
-        const start_date = String(sdEl?.value || "").trim();
 
-        if (!employee_code || !first_name || !last_name || !start_date) {
-          usersSetError("Please fill in EMPLOYEE CODE, FIRST NAME, LAST NAME and START DATE.");
+        if (!first_name || !last_name) {
+          usersSetError("Please fill in FIRST NAME and LAST NAME.");
           return;
         }
 
@@ -572,19 +561,15 @@ async function hydrateUsers() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              employee_code,
               first_name,
-              last_name,
-              start_date,
-              status: "active"
+              last_name
             })
           });
 
           const j = await r.json().catch(() => ({}));
           if (!r.ok || !j.ok) throw new Error(j.error || "Could not create employee");
 
-          // reset (keep start date)
-          if (codeEl) codeEl.value = "";
+          // reset
           if (firstEl) firstEl.value = "";
           if (lastEl) lastEl.value = "";
 
