@@ -1,18 +1,13 @@
 <section class="card">
   <h1 class="card-title">Employees</h1>
   <p class="card-text">
-    Manage the employees of your company. Each employee has an employee code, start and end date,
+    Manage the employees of your company. Each employee has an employee code, creation and stop date,
     and an active / inactive status.
   </p>
 
   <div class="users-toolbar">
     <form id="employee-create-form" class="users-form" autocomplete="off">
       <div class="users-form-grid">
-        <div class="users-field">
-          <label class="users-label" for="emp-code">EMPLOYEE CODE</label>
-          <input id="emp-code" class="users-input" type="text" placeholder="E.G. VDGI-001" required />
-        </div>
-
         <div class="users-field">
           <label class="users-label" for="emp-first">FIRST NAME</label>
           <input id="emp-first" class="users-input" type="text" placeholder="E.G. PIET" required />
@@ -24,7 +19,7 @@
         </div>
 
         <div class="users-field">
-          <label class="users-label" for="emp-startdate">START DATE</label>
+          <label class="users-label" for="emp-startdate">CREATION DATE</label>
           <input id="emp-startdate" class="users-input" type="date" required />
         </div>
 
@@ -45,8 +40,8 @@
         <th>Employee code</th>
         <th>Name</th>
         <th>Status</th>
-        <th>Start date</th>
-        <th>End date</th>
+        <th>Creation date</th>
+        <th>Stop date</th>
         <th>Actions</th>
       </tr>
     </thead>
