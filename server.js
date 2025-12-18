@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { pool } = require('./db/db');
 
 const app = express();
@@ -153,6 +154,95 @@ function firstNonEmpty(...vals) {
     if (t) return t;
   }
   return '';
+}
+
+// =========================================================
+// Employee identifiers (AUTO)
+// - employee_no: 1..9999 per company (toon als 0001)
+// - employee_code: random A-Z0-9
+// =========================================================
+function genEmployeeCode(len = 10) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let out = '';
+  for (let i = 0; i < len; i++) {
+    out += chars[crypto.randomInt(0, chars.length)];
+  }
+  return out;
+}
+
+function formatEmployeeNo(no) {
+  const n = Number(no);
+  if (!Number.isFinite(n)) return '';
+  return String(n).padStart(4, '0');
+}
+
+async function ensureEmployeeCounterTable() {
+  // Safe create
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS company_employee_counters (
+      company_id INTEGER PRIMARY KEY,
+      last_employee_no INTEGER NOT NULL DEFAULT 0
+    )`
+  );
+}
+
+async function allocateNextEmployeeNo(client, companyId) {
+  // Ensure counter row exists
+  await client.query(
+    `INSERT INTO company_employee_counters (company_id, last_employee_no)
+     VALUES ($1, 0)
+     ON CONFLICT (company_id) DO NOTHING`,
+    [companyId]
+  );
+
+  // Lock row
+  const counterRes = await client.query(
+    `SELECT last_employee_no
+     FROM company_employee_counters
+     WHERE company_id = $1
+     FOR UPDATE`,
+    [companyId]
+  );
+
+  const last = counterRes.rows[0] ? Number(counterRes.rows[0].last_employee_no) : 0;
+  const nextNo = last + 1;
+
+  if (nextNo > 9999) {
+    throw new Error('EMPLOYEE_LIMIT_REACHED');
+  }
+
+  await client.query(
+    `UPDATE company_employee_counters
+     SET last_employee_no = $2
+     WHERE company_id = $1`,
+    [companyId, nextNo]
+  );
+
+  return nextNo;
+}
+
+async function createEmployeeAutoIdentifiers(client, companyId) {
+  // Transaction expected by caller
+  const employeeNo = await allocateNextEmployeeNo(client, companyId);
+
+  // Generate code and ensure uniqueness (per company)
+  for (let i = 0; i < 10; i++) {
+    const code = genEmployeeCode(10);
+
+    // Check uniqueness (fast path)
+    const exists = await client.query(
+      `SELECT 1
+       FROM employees
+       WHERE company_id = $1 AND employee_code = $2
+       LIMIT 1`,
+      [companyId, code]
+    );
+    if (exists.rows.length) continue;
+
+    return { employeeNo, employeeCode: code };
+  }
+
+  throw new Error('EMPLOYEE_CODE_GENERATION_FAILED');
 }
 
 // =========================================================
@@ -781,6 +871,7 @@ app.get('/api/employees', requireAuth, async (req, res) => {
       `SELECT
          e.id,
          e.company_id,
+         e.employee_no,
          e.employee_code,
          e.first_name,
          e.last_name,
@@ -804,7 +895,13 @@ app.get('/api/employees', requireAuth, async (req, res) => {
       [companyId]
     );
 
-    res.json({ ok: true, employees: rows });
+    // add formatted display field (does not change DB)
+    const employees = rows.map(r => ({
+      ...r,
+      employee_no_display: formatEmployeeNo(r.employee_no)
+    }));
+
+    res.json({ ok: true, employees });
   } catch (err) {
     console.error('employees list error:', err);
     res.status(500).json({ ok: false, error: 'Server error.' });
@@ -812,14 +909,15 @@ app.get('/api/employees', requireAuth, async (req, res) => {
 });
 
 // =========================================================
-// API: Employees - CREATE (status must be 'active'/'inactive' lowercase)
+// API: Employees - CREATE
+// ✅ employee_no + employee_code are AUTO
 // =========================================================
 app.post('/api/employees', requireAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
     const companyId = req.auth.user.company_id;
     if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
-    const employee_code = normalizeUpper(req.body?.employee_code || '');
     const first_name = normalizeUpper(req.body?.first_name || '');
     const last_name = normalizeUpper(req.body?.last_name || '');
     const email = safeText(req.body?.email) ? normalizeLower(req.body?.email) : null;
@@ -832,7 +930,7 @@ app.post('/api/employees', requireAuth, async (req, res) => {
     const statusRaw = safeText(req.body?.status) || 'active';
     const status = normalizeLower(statusRaw);
 
-    if (!employee_code || !first_name || !last_name) {
+    if (!first_name || !last_name) {
       return res.status(400).json({ ok: false, error: 'Missing required fields.' });
     }
 
@@ -843,9 +941,14 @@ app.post('/api/employees', requireAuth, async (req, res) => {
     // start_date fallback: today
     const startDateValue = start_date ? start_date : new Date().toISOString().slice(0, 10);
 
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+
+    const { employeeNo, employeeCode } = await createEmployeeAutoIdentifiers(client, companyId);
+
+    const { rows } = await client.query(
       `INSERT INTO employees (
          company_id,
+         employee_no,
          employee_code,
          first_name,
          last_name,
@@ -858,11 +961,12 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          updated_at
        )
        VALUES (
-         $1,$2,$3,$4,$5,$6,$7,NULL,$8,NOW(),NOW()
+         $1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,NOW(),NOW()
        )
        RETURNING
          id,
          company_id,
+         employee_no,
          employee_code,
          first_name,
          last_name,
@@ -873,13 +977,30 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          status,
          created_at,
          updated_at`,
-      [companyId, employee_code, first_name, last_name, email, phone, startDateValue, status]
+      [companyId, employeeNo, employeeCode, first_name, last_name, email, phone, startDateValue, status]
     );
 
-    res.status(201).json({ ok: true, employee: rows[0] });
+    await client.query('COMMIT');
+
+    const employee = rows[0];
+    res.status(201).json({
+      ok: true,
+      employee: {
+        ...employee,
+        employee_no_display: formatEmployeeNo(employee.employee_no)
+      }
+    });
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
     console.error('employee create error:', err);
+
+    if (String(err?.message) === 'EMPLOYEE_LIMIT_REACHED') {
+      return res.status(409).json({ ok: false, error: 'Employee limit reached (9999).' });
+    }
+
     res.status(500).json({ ok: false, error: 'Server error.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -914,6 +1035,7 @@ app.patch('/api/employees/:id/status', requireAuth, async (req, res) => {
        RETURNING
          id,
          company_id,
+         employee_no,
          employee_code,
          first_name,
          last_name,
@@ -931,7 +1053,15 @@ app.patch('/api/employees/:id/status', requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Employee not found.' });
     }
 
-    res.json({ ok: true, employee: rows[0] });
+    const employee = rows[0];
+
+    res.json({
+      ok: true,
+      employee: {
+        ...employee,
+        employee_no_display: formatEmployeeNo(employee.employee_no)
+      }
+    });
   } catch (err) {
     console.error('employee status update error:', err);
     res.status(500).json({ ok: false, error: 'Server error.' });
@@ -1020,6 +1150,7 @@ app.get('/api/devices', requireAuth, async (req, res) => {
          db.employee_id,
          db.created_at,
          db.last_seen_at,
+         e.employee_no,
          e.employee_code,
          e.first_name,
          e.last_name
@@ -1032,7 +1163,12 @@ app.get('/api/devices', requireAuth, async (req, res) => {
       [companyId]
     );
 
-    res.json({ ok: true, devices: rows });
+    const devices = rows.map(r => ({
+      ...r,
+      employee_no_display: formatEmployeeNo(r.employee_no)
+    }));
+
+    res.json({ ok: true, devices });
   } catch (err) {
     console.error('devices list error:', err);
     res.status(500).json({ ok: false, error: 'Server error.' });
@@ -1118,6 +1254,17 @@ app.get('/api/health', async (_, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`MyPunctoo backend listening on port ${PORT}`);
-});
+// =========================================================
+// Startup
+// =========================================================
+(async () => {
+  try {
+    await ensureEmployeeCounterTable();
+  } catch (err) {
+    console.error('Startup ensureEmployeeCounterTable error:', err);
+  } finally {
+    app.listen(PORT, () => {
+      console.log(`MyPunctoo backend listening on port ${PORT}`);
+    });
+  }
+})();
