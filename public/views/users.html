@@ -2,7 +2,7 @@
   <h1 class="card-title">Employees</h1>
   <p class="card-text">
     Manage the employees of your company. Each employee has an employee code,
-    a creation date, and an active / inactive status.
+    an automatically generated creation date, and an active / inactive status.
   </p>
 
   <div class="users-toolbar">
@@ -10,21 +10,32 @@
       <div class="users-form-grid">
         <div class="users-field">
           <label class="users-label" for="emp-first">FIRST NAME</label>
-          <input id="emp-first" class="users-input" type="text" placeholder="E.G. PIET" required />
+          <input
+            id="emp-first"
+            class="users-input"
+            type="text"
+            placeholder="E.G. PIET"
+            required
+          />
         </div>
 
         <div class="users-field">
           <label class="users-label" for="emp-last">LAST NAME</label>
-          <input id="emp-last" class="users-input" type="text" placeholder="E.G. JANSENS" required />
-        </div>
-
-        <div class="users-field">
-          <label class="users-label" for="emp-startdate">CREATION DATE</label>
-          <input id="emp-startdate" class="users-input" type="date" required />
+          <input
+            id="emp-last"
+            class="users-input"
+            type="text"
+            placeholder="E.G. JANSENS"
+            required
+          />
         </div>
 
         <div class="users-field users-field--actions">
-          <button id="employee-create-btn" class="users-btn users-btn--primary" type="submit">
+          <button
+            id="employee-create-btn"
+            class="users-btn users-btn--primary"
+            type="submit"
+          >
             ADD EMPLOYEE
           </button>
         </div>
