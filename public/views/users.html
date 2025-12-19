@@ -90,3 +90,44 @@
   </table>
 </section>
 
+<!-- =======================================================
+     Schedule modal
+     ======================================================= -->
+<div id="schedule-modal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop"></div>
+
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title" id="schedule-modal-title">Expected working hours</h2>
+      <button id="schedule-close" class="users-btn users-btn--secondary" type="button">CLOSE</button>
+    </div>
+
+    <p class="card-text" style="margin-top: 0;">
+      Configure the expected working hours and break per day for this employee.
+    </p>
+
+    <p id="schedule-error" class="users-error" aria-live="polite"></p>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Expected hours</th>
+            <th>Break (min)</th>
+          </tr>
+        </thead>
+        <tbody id="schedule-tbody">
+          <tr>
+            <td colspan="3" class="table-empty">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="users-actions" style="justify-content: flex-end; margin-top: 12px;">
+      <button id="schedule-save" class="users-btn users-btn--primary" type="button">SAVE</button>
+    </div>
+  </div>
+</div>
+

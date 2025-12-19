@@ -313,6 +313,12 @@ function devicesSetError(msg) {
   el.textContent = msg ? String(msg) : "";
 }
 
+function scheduleSetError(msg) {
+  const el = document.getElementById("schedule-error");
+  if (!el) return;
+  el.textContent = msg ? String(msg) : "";
+}
+
 function normalizeUpper(str) {
   return String(str || "").trim().toUpperCase();
 }
@@ -346,6 +352,164 @@ async function usersFetchEmployees() {
   return data.employees || [];
 }
 
+// =========================================================
+// Expected schedule (per employee)
+// =========================================================
+const WEEKDAYS = [
+  { key: 1, label: "MONDAY" },
+  { key: 2, label: "TUESDAY" },
+  { key: 3, label: "WEDNESDAY" },
+  { key: 4, label: "THURSDAY" },
+  { key: 5, label: "FRIDAY" },
+  { key: 6, label: "SATURDAY" },
+  { key: 0, label: "SUNDAY" }
+];
+
+let scheduleModalState = {
+  isOpen: false,
+  employeeId: null,
+  employeeName: "",
+  rows: [] // { weekday, expected_minutes, break_minutes }
+};
+
+function openScheduleModal(employeeId, employeeName) {
+  const modal = document.getElementById("schedule-modal");
+  if (!modal) return;
+
+  scheduleModalState.isOpen = true;
+  scheduleModalState.employeeId = employeeId;
+  scheduleModalState.employeeName = employeeName || "";
+
+  const title = document.getElementById("schedule-modal-title");
+  if (title) {
+    title.textContent = employeeName
+      ? `Expected working hours — ${employeeName}`
+      : "Expected working hours";
+  }
+
+  scheduleSetError("");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeScheduleModal() {
+  const modal = document.getElementById("schedule-modal");
+  if (!modal) return;
+
+  scheduleModalState.isOpen = false;
+  scheduleModalState.employeeId = null;
+  scheduleModalState.employeeName = "";
+  scheduleModalState.rows = [];
+
+  scheduleSetError("");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+function hoursToMinutes(hours) {
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h < 0) return 0;
+  return Math.round(h * 60);
+}
+
+function minutesToHours(minutes) {
+  const m = Number(minutes);
+  if (!Number.isFinite(m) || m <= 0) return 0;
+  return Math.round((m / 60) * 100) / 100;
+}
+
+async function fetchExpectedSchedule(employeeId) {
+  const res = await apiFetch(`/api/employees/${encodeURIComponent(employeeId)}/expected-schedule`, { cache: "no-cache" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not load schedule");
+  return data.schedule || [];
+}
+
+async function saveExpectedSchedule(employeeId, scheduleRows) {
+  const res = await apiFetch(`/api/employees/${encodeURIComponent(employeeId)}/expected-schedule`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ schedule: scheduleRows })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not save schedule");
+  return data.schedule || [];
+}
+
+function renderScheduleTable(scheduleRows) {
+  const tbody = document.getElementById("schedule-tbody");
+  if (!tbody) return;
+
+  const mapByDay = new Map();
+  (scheduleRows || []).forEach(r => {
+    mapByDay.set(Number(r.weekday), {
+      weekday: Number(r.weekday),
+      expected_minutes: Number(r.expected_minutes || 0),
+      break_minutes: Number(r.break_minutes || 0)
+    });
+  });
+
+  const rowsHtml = WEEKDAYS.map(d => {
+    const existing = mapByDay.get(d.key) || { weekday: d.key, expected_minutes: 0, break_minutes: 0 };
+    const expectedHours = minutesToHours(existing.expected_minutes);
+    const breakMin = Number(existing.break_minutes || 0);
+
+    return `
+      <tr data-weekday="${escapeHtml(d.key)}">
+        <td><strong>${escapeHtml(d.label)}</strong></td>
+        <td>
+          <input
+            class="users-input"
+            type="number"
+            min="0"
+            step="0.25"
+            value="${escapeHtml(expectedHours)}"
+            data-field="hours"
+            style="max-width: 140px;"
+          />
+        </td>
+        <td>
+          <input
+            class="users-input"
+            type="number"
+            min="0"
+            step="5"
+            value="${escapeHtml(breakMin)}"
+            data-field="break"
+            style="max-width: 140px;"
+          />
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = rowsHtml.join("");
+}
+
+function collectScheduleFromModal() {
+  const tbody = document.getElementById("schedule-tbody");
+  if (!tbody) return [];
+
+  const out = [];
+  const trs = tbody.querySelectorAll("tr[data-weekday]");
+  trs.forEach(tr => {
+    const weekday = Number(tr.getAttribute("data-weekday"));
+    const hoursEl = tr.querySelector("input[data-field='hours']");
+    const breakEl = tr.querySelector("input[data-field='break']");
+
+    const hours = hoursEl ? Number(hoursEl.value) : 0;
+    const br = breakEl ? Number(breakEl.value) : 0;
+
+    out.push({
+      weekday,
+      expected_minutes: hoursToMinutes(hours),
+      break_minutes: Number.isFinite(br) && br > 0 ? Math.round(br) : 0
+    });
+  });
+
+  return out;
+}
+
 async function usersRenderEmployees() {
   const tbody = document.getElementById("users-tbody");
   if (!tbody) return;
@@ -372,6 +536,8 @@ async function usersRenderEmployees() {
 
     const toggleLabel = isInactive ? "SET ACTIVE" : "SET INACTIVE";
 
+    const scheduleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="schedule" data-id="${escapeHtml(id)}" data-name="${escapeHtml(fullName)}">SCHEDULE</button>`;
+
     // Delete is only allowed when there are NO punches
     const deleteBtn = hasPunches
       ? `<button class="users-btn users-btn--disabled" type="button" disabled title="Not allowed after first scan.">DELETE</button>`
@@ -379,7 +545,7 @@ async function usersRenderEmployees() {
 
     const toggleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="toggle" data-id="${escapeHtml(id)}" data-next="${escapeHtml(isInactive ? "active" : "inactive")}">${escapeHtml(toggleLabel)}</button>`;
 
-    const actions = `<div class="users-actions">${toggleBtn}${deleteBtn}</div>`;
+    const actions = `<div class="users-actions">${scheduleBtn}${toggleBtn}${deleteBtn}</div>`;
 
     return `
       <tr>
@@ -407,6 +573,30 @@ async function usersRenderEmployees() {
     usersSetError("");
 
     try {
+      if (action === "schedule") {
+        const name = btn.dataset.name || "";
+        btn.disabled = true;
+
+        try {
+          openScheduleModal(id, name);
+
+          const tbodySched = document.getElementById("schedule-tbody");
+          if (tbodySched) tbodySched.innerHTML = `<tr><td colspan="3" class="table-empty">Loading…</td></tr>`;
+
+          const schedule = await fetchExpectedSchedule(id);
+          scheduleModalState.rows = schedule;
+
+          renderScheduleTable(schedule);
+        } catch (err) {
+          console.warn(err);
+          scheduleSetError(err?.message || "Could not load schedule.");
+        } finally {
+          btn.disabled = false;
+        }
+
+        return;
+      }
+
       if (action === "toggle") {
         const next = btn.dataset.next || "";
         btn.disabled = true;
@@ -534,6 +724,48 @@ async function hydrateUsers() {
   try {
     usersSetError("");
     devicesSetError("");
+    scheduleSetError("");
+
+    // Schedule modal wiring
+    const schedModal = document.getElementById("schedule-modal");
+    const schedClose = document.getElementById("schedule-close");
+    const schedSave = document.getElementById("schedule-save");
+
+    if (schedClose) schedClose.onclick = closeScheduleModal;
+    if (schedModal) {
+      const backdrop = schedModal.querySelector(".modal-backdrop");
+      if (backdrop) backdrop.onclick = closeScheduleModal;
+    }
+
+    if (schedSave) {
+      schedSave.onclick = async () => {
+        if (!scheduleModalState.employeeId) return;
+
+        scheduleSetError("");
+        schedSave.disabled = true;
+
+        try {
+          const rows = collectScheduleFromModal();
+
+          // Basic sanity: break cannot exceed expected minutes
+          for (const r of rows) {
+            if (Number(r.break_minutes) > Number(r.expected_minutes)) {
+              throw new Error("Break cannot be longer than expected working time.");
+            }
+          }
+
+          const saved = await saveExpectedSchedule(scheduleModalState.employeeId, rows);
+          scheduleModalState.rows = saved;
+
+          closeScheduleModal();
+        } catch (err) {
+          console.warn(err);
+          scheduleSetError(err?.message || "Could not save schedule.");
+        } finally {
+          schedSave.disabled = false;
+        }
+      };
+    }
 
     // Create form handler
     const form = document.getElementById("employee-create-form");
