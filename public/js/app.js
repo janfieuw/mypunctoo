@@ -36,7 +36,7 @@ async function requireSessionOrRedirect() {
 
 async function loadView(viewName) {
   try {
-    // ✅ IMPORTANT: absolute path so it works from /app as well
+    // ✅ IMPORTANT: absolute path so it works from /app as wellL
     const response = await fetch(`/views/${viewName}.html`, { cache: "no-cache" });
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
