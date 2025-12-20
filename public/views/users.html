@@ -6,289 +6,131 @@
     <ul class="employees-intro__list">
       <li>Add employees who actively use Punctoo.</li>
       <li>After the first scan, employees can no longer be deleted (<strong>Raw data present</strong>).</li>
-      <li>To keep a correct overview, you can switch an employee from <strong>Active</strong> to <strong>Inactive</strong>.</li>
-      <li>Stored raw data: <strong>Employee Code</strong>, <strong>IN-scan</strong> timestamp, <strong>OUT-scan</strong> timestamp.</li>
-      <li><strong>Working schedules</strong> are optional and only used for Over‑Time calculations in reports.</li>
-      <li>Working schedules can be added or removed at any time.</li>
-      <li>Employees without a working schedule will not be included in the Over‑Time report.</li>
+      <li>You can switch an employee from <strong>Active</strong> to <strong>Inactive</strong>.</li>
+      <li>Working schedules are optional and used only for Over-Time reports.</li>
     </ul>
   </div>
 
   <form id="employee-create-form" class="users-form-inline" autocomplete="off">
     <div class="users-field-inline">
-      <label class="users-label" for="emp-first">First name</label>
+      <label class="users-label">First name</label>
       <input id="emp-first" class="users-input" type="text" required />
     </div>
 
     <div class="users-field-inline">
-      <label class="users-label" for="emp-last">Last name</label>
+      <label class="users-label">Last name</label>
       <input id="emp-last" class="users-input" type="text" required />
     </div>
 
-    <button id="employee-create-btn" class="users-btn users-btn--primary" type="submit">Add employee</button>
+    <button class="users-btn users-btn--primary">Add employee</button>
   </form>
 
-  <p id="users-error" class="users-error" aria-live="polite"></p>
-
-  <div class="table-wrap" style="margin-top:12px;">
-    <table class="table refined-table refined-fixed">
+  <div class="table-wrap">
+    <table class="table refined-table">
       <colgroup>
-        <col style="width: 150px;">
-        <col style="width: 170px;">
-        <col style="width: 150px;">
-        <col style="width: 150px;">
-        <col style="width: 440px;">
-        <col style="width: 140px;">
+        <col style="width:160px">
+        <col style="width:180px">
+        <col style="width:160px">
+        <col style="width:160px">
+        <col style="width:420px">
+        <col style="width:140px">
       </colgroup>
+
       <thead>
         <tr>
-          <th>Employee code</th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Creation date</th>
-          <th>Working schedule</th>
+          <th><span class="th-label">Employee code</span></th>
+          <th><span class="th-label">Name</span></th>
+          <th><span class="th-label center">Status</span></th>
+          <th><span class="th-label">Creation date</span></th>
+          <th><span class="th-label">Working schedule</span></th>
           <th class="th-blank"></th>
         </tr>
       </thead>
+
       <tbody id="users-tbody">
         <tr>
-          <td colspan="6" class="table-empty">Loading…</td>
+          <td>DA4BGMU070</td>
+          <td>Jan Fieuw</td>
+          <td class="center">
+            <span class="status-pill active">Active</span>
+          </td>
+          <td>2025-12-20</td>
+          <td>
+            <div class="users-actions">
+              <button class="users-btn users-btn--green">Added / View</button>
+              <button class="users-btn users-btn--red">Remove working schedule</button>
+            </div>
+          </td>
+          <td>
+            <button class="users-btn users-btn--red">Delete</button>
+          </td>
         </tr>
       </tbody>
     </table>
   </div>
 </section>
 
-<!-- Schedule modal -->
-<div id="schedule-modal" class="modal" aria-hidden="true">
-  <div class="modal-backdrop"></div>
-
-  <div class="modal-card refined-modal">
-    <div class="modal-header">
-      <h2 class="modal-title" id="schedule-modal-title">Working schedule (minutes)</h2>
-      <button id="schedule-close" class="users-btn users-btn--ghost" type="button">Close</button>
-    </div>
-
-    <p class="card-text employees-modal-sub">
-      Optional. Used only for internal reports. Does not affect time registrations.
-    </p>
-
-    <p id="schedule-error" class="users-error" aria-live="polite"></p>
-
-    <div class="table-wrap">
-      <table class="table refined-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Work minutes</th>
-            <th>Break minutes</th>
-          </tr>
-        </thead>
-        <tbody id="schedule-tbody">
-          <tr>
-            <td colspan="3" class="table-empty">Loading…</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
-      <button id="schedule-save" class="users-btn users-btn--primary" type="button">Save</button>
-    </div>
-  </div>
-</div>
-
 <style>
-  /* Typography: refined, still JetBrains everywhere */
-  :where(.refined, .refined *, .users-label, .users-btn, .refined-table thead th, .status-pill, .employees-modal-sub){
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  * { font-family: "JetBrains Mono", monospace; }
+
+  .refined-table{
+    border-collapse: separate;
+    border-spacing: 12px 10px;
   }
 
-  /* Intro block: softer, card-like */
-  .employees-intro.refined{
-    margin: 10px 0 18px 0;
-    padding: 12px 14px;
-    border: 1px solid rgba(0,0,0,0.10);
-    background: rgba(0,0,0,0.02);
-    border-radius: 12px;
-    font-size: 12px;
-    line-height: 1.55;
-    letter-spacing: 0.15px;
-    opacity: 0.95;
-  }
-  .employees-intro__title{
-    font-weight: 900;
-    font-size: 13px;
-    margin-bottom: 8px;
-  }
-  .employees-intro__list{
-    margin: 0;
-    padding-left: 18px;
-  }
-  .employees-intro__list li{
-    margin: 0 0 6px 0;
-  }
-  .employees-intro strong{ font-weight: 900; }
-
-  /* Form: refined labels and spacing */
-  .users-form-inline{
-    display:flex;
-    align-items:flex-end;
-    gap: 14px;
-    flex-wrap: wrap;
-    margin: 12px 0 14px 0;
-  }
-  .users-field-inline{ display:flex; flex-direction:column; gap: 6px; }
-  .users-label{
-    font-size: 12px;
-    letter-spacing: 0.15px;
-    opacity: 0.75;
-  }
-  .users-input{
-    height: 32px;
-    padding: 4px 12px;
-    border: 1px solid rgba(0,0,0,0.16);
-    border-radius: 12px;
-    width: 220px;
-    outline: none;
-    letter-spacing: 0.15px;
-    text-transform: uppercase;
-    background: #fff;
-  }
-  .users-input:focus{
-    border-color: rgba(0,0,0,0.30);
-    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
-  }
-
-  /* Buttons: less aggressive, consistent */
-  .users-btn{
-    height: 34px;
-    padding: 0 14px;
-    border-radius: 12px;
-    border: 1px solid rgba(0,0,0,0.16);
-    cursor:pointer;
-    font-weight: 900;
-    letter-spacing: 0.15px;
-    font-size: 12px;
-    background: #fff;
-  }
-  .users-btn:disabled{ opacity: .55; cursor:not-allowed; }
-
-  .users-btn--primary{
-    background: #f5c400;
-    border-color: rgba(0,0,0,0.20);
-    color:#000;
-  }
-  .users-btn--ghost{ background: #fff; color:#000; }
-
-  /* These classes are used by app.js for row buttons */
-  .users-btn--green{
-    background: rgba(31,125,31,0.12);
-    color: #0f3f0f;
-    border-color: rgba(15,63,15,0.25);
-  }
-  .users-btn--red{
-    background: rgba(225,25,25,0.10);
-    color: #7a0b0b;
-    border-color: rgba(122,11,11,0.25);
-  }
-  .users-btn--white{ background: #fff; color: #000; }
-
-  .users-error{ color:#b10f0f; font-weight: 900; margin: 8px 0 0 0; }
-  .muted-note{ opacity: .7; font-size: 12px; letter-spacing: .15px; }
-
-  /* ===== OPTION A: collapse table so headers and cells match perfectly ===== */
-  .table-wrap{ overflow-x:auto; }
-  table.refined-fixed{ table-layout: fixed; }
-  table.table{ width:100%; border-collapse: collapse; }
-
-  .refined-table thead th{
-    background: rgba(0,0,0,0.78);
+  .th-label{
+    display:inline-block;
+    background:#2f2f2f;
     color:#fff;
-    padding: 8px 12px;
-    font-size: 12px;
-    letter-spacing: .15px;
-    font-weight: 900;
-    border-radius: 12px;
-    white-space: nowrap;
-    text-align: left;
-  }
-  .refined-table thead th.th-blank{
-    background: transparent;
-    color: transparent;
-    padding: 0;
+    padding:6px 14px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:800;
+    white-space:nowrap;
   }
 
-  table.table tbody td{
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(0,0,0,0.10);
-    font-size: 12px;
-    white-space: nowrap;
-    vertical-align: middle;
-  }
-  table.table tbody tr:last-child td{ border-bottom: none; }
+  .th-label.center{ text-align:center; width:100%; }
 
-  table.refined-fixed th, table.refined-fixed td{
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .th-blank{ background:none; }
+
+  td{
+    padding:6px 8px;
+    vertical-align:middle;
+    font-size:12px;
   }
 
-  /* Status pill: subtle, clickable — same radius family */
+  .center{ text-align:center; }
+
   .status-pill{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-width: 110px;
-    height: 30px;
-    padding: 0 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(0,0,0,0.16);
-    font-weight: 900;
-    letter-spacing: .15px;
-    font-size: 12px;
-    cursor:pointer;
-    background:#fff;
+    display:inline-block;
+    padding:6px 18px;
+    border-radius:999px;
+    border:1px solid rgba(0,0,0,.2);
+    font-weight:800;
   }
+
   .status-pill.active{
-    background: rgba(31,125,31,0.12);
-    color: #0f3f0f;
-    border-color: rgba(15,63,15,0.25);
-  }
-  .status-pill.inactive{
-    background: rgba(0,0,0,0.04);
-    color: rgba(0,0,0,0.55);
-    border-color: rgba(0,0,0,0.16);
+    background:rgba(31,125,31,.12);
+    color:#0f3f0f;
   }
 
-  /* Actions layout */
-  .users-actions{ display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+  .users-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
 
-  /* Modal */
-  .modal{ position:fixed; inset:0; display:none; z-index:1000; }
-  .modal.open{ display:block; }
-  .modal-backdrop{ position:fixed; inset:0; background: rgba(0,0,0,0.55); }
-  .modal-card{
-    position:relative;
-    z-index:1001;
+  .users-btn{
+    border-radius:999px;
+    padding:6px 14px;
+    font-size:12px;
+    font-weight:800;
+    border:1px solid rgba(0,0,0,.2);
     background:#fff;
-    border-radius: 16px;
-    max-width: 820px;
-    margin: 6vh auto;
-    padding: 18px;
-    border: 1px solid rgba(0,0,0,0.10);
-    box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+    cursor:pointer;
   }
-  .modal-header{ display:flex; justify-content:space-between; align-items:center; gap: 10px; }
-  .modal-title{
-    margin:0;
-    font-size: 16px;
-    font-weight: 900;
-    letter-spacing: .15px;
-  }
-  .employees-modal-sub{
-    margin-top: 10px;
-    font-size: 12px;
-    letter-spacing: .15px;
-    opacity:.85;
-  }
+
+  .users-btn--primary{ background:#f5c400; }
+  .users-btn--green{ background:rgba(31,125,31,.12); }
+  .users-btn--red{ background:rgba(225,25,25,.1); }
 </style>
