@@ -2,14 +2,38 @@
   <h1 class="card-title">Employees</h1>
 
   <div class="employees-intro">
-    LEES AANDACHTIG VOOR CORRECTE WERKING VAN PUNCTOO:<br>
-    VOEG WERKNEMERS TOE DIE GEBRUIK MAKEN VAN PUNCTOO.<br>
-    NA DE EERSTE SCAN KUNNEN DE WERKNEMERS NIET MEER VERWIJDERD WORDEN: RAW DATA PRESENT.<br>
-    OM EEN CORRECT OVERZICHT TE BEWAREN KUN JE PER WERKNEMER DE STATUS WIJZIGEN VAN ACTIVE NAAR INACTIVE.<br>
-    DE RUWE DATA DIE WORDT BIJGEHOUDEN IS DE EMPLOYEE CODE, HET TIJDSTIP VAN DE IN-SCAN EN HET TIJDSTIP VAN DE OUT-SCAN.<br>
-    VOOR HET RAPPORT MET AUTOMATISCHE BEREKENING VAN OVER-TIME KUN JE ALS OPTIE GEBRUIK MAKEN VAN WORKING SCHEDULES.<br>
-    WORKING SCHEDULES KUNNEN STEEDS VERWIJDERD WORDEN.<br>
-    WERKNEMERS ZONDER TOEGEVOEGD WORKING SCHEDULE ZULLEN NIET OPGNOMEN WORDEN IN HET RAPPORT.
+    <strong>PLEASE READ CAREFULLY FOR CORRECT OPERATION OF PUNCTOO:</strong>
+    <ul>
+      <li>Add employees who actively use Punctoo.</li>
+      <li>
+        After the first scan, employees can no longer be deleted
+        (<strong>RAW DATA PRESENT</strong>).
+      </li>
+      <li>
+        To maintain a correct overview, you can change an employee’s status from
+        <strong>ACTIVE</strong> to <strong>INACTIVE</strong>.
+      </li>
+      <li>
+        Stored raw data consists of:
+        <ul>
+          <li><strong>Employee Code</strong></li>
+          <li>Timestamp of the <strong>IN-scan</strong></li>
+          <li>Timestamp of the <strong>OUT-scan</strong></li>
+        </ul>
+      </li>
+      <li>
+        For the report with automatic <strong>Over-Time</strong> calculation, you can
+        optionally use <strong>WORKING SCHEDULES</strong>.
+      </li>
+     
+      <li>
+        Employees without an assigned <strong>WORKING SCHEDULE</strong> will not be
+        included in the Over-Time report.
+      </li>
+       <li>
+        <strong>WORKING SCHEDULES</strong> can be added or removed at any time.
+      </li>
+    </ul>
   </div>
 
   <form id="employee-create-form" class="users-form-inline" autocomplete="off">
@@ -23,7 +47,9 @@
       <input id="emp-last" class="users-input" type="text" required />
     </div>
 
-    <button id="employee-create-btn" class="users-btn users-btn--yellow" type="submit">ADD EMPLOYEE</button>
+    <button id="employee-create-btn" class="users-btn users-btn--yellow" type="submit">
+      ADD EMPLOYEE
+    </button>
   </form>
 
   <p id="users-error" class="users-error" aria-live="polite"></p>
@@ -55,11 +81,18 @@
 
   <div class="modal-card">
     <div class="modal-header">
-      <h2 class="modal-title" id="schedule-modal-title">WORKING SCHEDULE (MINUTES)</h2>
-      <button id="schedule-close" class="users-btn users-btn--gray" type="button">CLOSE</button>
+      <h2 class="modal-title" id="schedule-modal-title">
+        WORKING SCHEDULE (MINUTES)
+      </h2>
+      <button id="schedule-close" class="users-btn users-btn--gray" type="button">
+        CLOSE
+      </button>
     </div>
 
-    <p class="card-text" style="margin-top: 10px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px;">
+    <p
+      class="card-text"
+      style="margin-top: 10px; font-size: 12px; letter-spacing: 0.4px;"
+    >
       Optional. Used only for internal reports. Does not affect time registrations.
     </p>
 
@@ -83,96 +116,26 @@
     </div>
 
     <div style="display:flex; justify-content:flex-end; margin-top:12px;">
-      <button id="schedule-save" class="users-btn users-btn--yellow" type="button">SAVE</button>
+      <button id="schedule-save" class="users-btn users-btn--yellow" type="button">
+        SAVE
+      </button>
     </div>
   </div>
 </div>
 
 <style>
-  /* Match your screenshot look without fighting your global CSS */
   .employees-intro{
     margin: 6px 0 18px 0;
     font-size: 12px;
-    line-height: 1.65;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
+    line-height: 1.6;
+    letter-spacing: 0.3px;
     opacity: 0.9;
   }
-
-  .users-form-inline {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin: 10px 0 18px 0;
+  .employees-intro ul{
+    margin: 8px 0 0 18px;
+    padding: 0;
   }
-  .users-field-inline { display: flex; flex-direction: column; gap: 6px; }
-  .users-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
-  .users-input {
-    height: 26px;
-    padding: 2px 8px;
-    border: 1px solid rgba(0,0,0,0.35);
-    border-radius: 0;
-    width: 190px;
-    outline: none;
+  .employees-intro li{
+    margin-bottom: 6px;
   }
-  .users-btn {
-    height: 28px;
-    padding: 0 16px;
-    border-radius: 0;
-    border: 1px solid rgba(0,0,0,0.55);
-    cursor: pointer;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    font-size: 12px;
-  }
-  .users-btn--yellow { background: #f5c400; color: #000; }
-  .users-btn--gray { background: #e9e9e9; color: #000; }
-  .users-btn--green { background: #1f7d1f; color: #fff; border-color: #0f3f0f; }
-  .users-btn--red { background: #e11919; color: #fff; border-color: #7a0b0b; }
-  .users-btn--white { background: #fff; color: #000; }
-
-  .users-actions { display:flex; gap: 10px; align-items:center; }
-  .users-error { color: #e11919; font-weight: 700; margin: 8px 0 0 0; }
-  .muted-note { opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
-
-  .table-wrap { overflow-x: auto; }
-  table.table { width: 100%; border-collapse: separate; border-spacing: 10px 8px; }
-  table.table thead th {
-    background: #4a4a4a;
-    color: #fff;
-    padding: 4px 10px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    text-align: left;
-    white-space: nowrap;
-  }
-  table.table tbody td { font-size: 12px; vertical-align: middle; white-space: nowrap; }
-  .table-empty { opacity: 0.7; }
-
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 120px;
-    height: 22px;
-    padding: 0 10px;
-    border: 1px solid rgba(0,0,0,0.75);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .status-pill.active { background: #1f7d1f; color: #fff; border-color: #0f3f0f; }
-  .status-pill.inactive { background: #fff; color: #9a9a9a; border-color: rgba(0,0,0,0.35); }
-
-  .modal { position: fixed; inset: 0; display: none; z-index: 1000; }
-  .modal.open { display: block; }
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); }
-  .modal-card { position: relative; z-index: 1001; background: #fff; border-radius: 12px; max-width: 780px; margin: 6vh auto; padding: 18px; }
-  .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .modal-title { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
 </style>
