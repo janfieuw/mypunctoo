@@ -31,7 +31,15 @@
   <p id="users-error" class="users-error" aria-live="polite"></p>
 
   <div class="table-wrap" style="margin-top:12px;">
-    <table class="table refined-table">
+    <table class="table refined-table refined-fixed">
+      <colgroup>
+        <col style="width: 140px;">
+        <col style="width: 140px;">
+        <col style="width: 140px;">
+        <col style="width: 140px;">
+        <col style="width: 420px;">
+        <col style="width: 140px;">
+      </colgroup>
       <thead>
         <tr>
           <th>Employee code</th>
@@ -39,7 +47,7 @@
           <th>Status</th>
           <th>Creation date</th>
           <th>Working schedule</th>
-          <th></th>
+          <th class="th-blank"></th>
         </tr>
       </thead>
       <tbody id="users-tbody">
@@ -277,4 +285,28 @@
     text-transform:none;
     opacity:.85;
   }
+
+  /* ===== Requested refinements ===== */
+  table.refined-fixed{
+    table-layout: fixed;
+  }
+  /* Make header + cells align visually */
+  table.refined-fixed th, table.refined-fixed td{
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Same radius for ACTIVE/INACTIVE as other UI elements */
+  .status-pill{
+    border-radius: 10px; /* same family as buttons/headers */
+  }
+
+  /* The header cell above DELETE should be transparent/white */
+  .refined-table thead th.th-blank{
+    background: transparent !important;
+    color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
 </style>
