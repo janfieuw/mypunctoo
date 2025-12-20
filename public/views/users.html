@@ -33,11 +33,11 @@
   <div class="table-wrap" style="margin-top:12px;">
     <table class="table refined-table refined-fixed">
       <colgroup>
-        <col style="width: 140px;">
-        <col style="width: 140px;">
-        <col style="width: 140px;">
-        <col style="width: 140px;">
-        <col style="width: 420px;">
+        <col style="width: 150px;">
+        <col style="width: 170px;">
+        <col style="width: 150px;">
+        <col style="width: 150px;">
+        <col style="width: 440px;">
         <col style="width: 140px;">
       </colgroup>
       <thead>
@@ -110,14 +110,14 @@
     padding: 12px 14px;
     border: 1px solid rgba(0,0,0,0.10);
     background: rgba(0,0,0,0.02);
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 12px;
     line-height: 1.55;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.15px;
     opacity: 0.95;
   }
   .employees-intro__title{
-    font-weight: 800;
+    font-weight: 900;
     font-size: 13px;
     margin-bottom: 8px;
   }
@@ -128,9 +128,7 @@
   .employees-intro__list li{
     margin: 0 0 6px 0;
   }
-  .employees-intro strong{
-    font-weight: 800;
-  }
+  .employees-intro strong{ font-weight: 900; }
 
   /* Form: refined labels and spacing */
   .users-form-inline{
@@ -143,36 +141,34 @@
   .users-field-inline{ display:flex; flex-direction:column; gap: 6px; }
   .users-label{
     font-size: 12px;
-    letter-spacing: 0.2px;
-    opacity: 0.8;
-    text-transform: none;
+    letter-spacing: 0.15px;
+    opacity: 0.75;
   }
   .users-input{
-    height: 30px;
-    padding: 4px 10px;
-    border: 1px solid rgba(0,0,0,0.18);
-    border-radius: 10px;
+    height: 32px;
+    padding: 4px 12px;
+    border: 1px solid rgba(0,0,0,0.16);
+    border-radius: 12px;
     width: 220px;
     outline: none;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.15px;
     text-transform: uppercase;
     background: #fff;
   }
   .users-input:focus{
-    border-color: rgba(0,0,0,0.35);
+    border-color: rgba(0,0,0,0.30);
     box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
   }
 
   /* Buttons: less aggressive, consistent */
   .users-btn{
-    height: 32px;
+    height: 34px;
     padding: 0 14px;
-    border-radius: 10px;
-    border: 1px solid rgba(0,0,0,0.18);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.16);
     cursor:pointer;
-    font-weight: 800;
-    letter-spacing: 0.2px;
-    text-transform: none;
+    font-weight: 900;
+    letter-spacing: 0.15px;
     font-size: 12px;
     background: #fff;
   }
@@ -180,13 +176,10 @@
 
   .users-btn--primary{
     background: #f5c400;
-    border-color: rgba(0,0,0,0.22);
+    border-color: rgba(0,0,0,0.20);
     color:#000;
   }
-  .users-btn--ghost{
-    background: #fff;
-    color:#000;
-  }
+  .users-btn--ghost{ background: #fff; color:#000; }
 
   /* These classes are used by app.js for row buttons */
   .users-btn--green{
@@ -199,50 +192,62 @@
     color: #7a0b0b;
     border-color: rgba(122,11,11,0.25);
   }
-  .users-btn--white{
-    background: #fff;
-    color: #000;
-  }
+  .users-btn--white{ background: #fff; color: #000; }
 
-  .users-error{ color:#b10f0f; font-weight: 800; margin: 8px 0 0 0; }
-  .muted-note{ opacity: .7; font-size: 12px; letter-spacing: .2px; }
+  .users-error{ color:#b10f0f; font-weight: 900; margin: 8px 0 0 0; }
+  .muted-note{ opacity: .7; font-size: 12px; letter-spacing: .15px; }
 
-  /* Table: lighter header, cleaner spacing */
+  /* ===== OPTION A: collapse table so headers and cells match perfectly ===== */
   .table-wrap{ overflow-x:auto; }
-  table.table{ width:100%; border-collapse: separate; border-spacing: 10px 10px; }
+  table.refined-fixed{ table-layout: fixed; }
+  table.table{ width:100%; border-collapse: collapse; }
+
   .refined-table thead th{
     background: rgba(0,0,0,0.78);
     color:#fff;
-    padding: 6px 10px;
+    padding: 8px 12px;
     font-size: 12px;
-    letter-spacing: .25px;
-    text-transform: none;
+    letter-spacing: .15px;
     font-weight: 900;
-    border-radius: 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    text-align: left;
   }
+  .refined-table thead th.th-blank{
+    background: transparent;
+    color: transparent;
+    padding: 0;
+  }
+
   table.table tbody td{
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.10);
     font-size: 12px;
     white-space: nowrap;
-    padding: 4px 2px;
+    vertical-align: middle;
   }
-  .table-empty{ opacity:.7; }
+  table.table tbody tr:last-child td{ border-bottom: none; }
 
-  /* Status pill: subtle, clickable */
+  table.refined-fixed th, table.refined-fixed td{
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Status pill: subtle, clickable — same radius family */
   .status-pill{
     display:inline-flex;
     align-items:center;
     justify-content:center;
     min-width: 110px;
-    height: 28px;
+    height: 30px;
     padding: 0 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(0,0,0,0.18);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.16);
     font-weight: 900;
-    letter-spacing: .2px;
+    letter-spacing: .15px;
     font-size: 12px;
     cursor:pointer;
     background:#fff;
-    text-transform:none;
   }
   .status-pill.active{
     background: rgba(31,125,31,0.12);
@@ -255,6 +260,9 @@
     border-color: rgba(0,0,0,0.16);
   }
 
+  /* Actions layout */
+  .users-actions{ display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+
   /* Modal */
   .modal{ position:fixed; inset:0; display:none; z-index:1000; }
   .modal.open{ display:block; }
@@ -263,7 +271,7 @@
     position:relative;
     z-index:1001;
     background:#fff;
-    border-radius: 14px;
+    border-radius: 16px;
     max-width: 820px;
     margin: 6vh auto;
     padding: 18px;
@@ -275,38 +283,12 @@
     margin:0;
     font-size: 16px;
     font-weight: 900;
-    letter-spacing: .25px;
-    text-transform: none;
+    letter-spacing: .15px;
   }
   .employees-modal-sub{
     margin-top: 10px;
     font-size: 12px;
-    letter-spacing: .2px;
-    text-transform:none;
+    letter-spacing: .15px;
     opacity:.85;
   }
-
-  /* ===== Requested refinements ===== */
-  table.refined-fixed{
-    table-layout: fixed;
-  }
-  /* Make header + cells align visually */
-  table.refined-fixed th, table.refined-fixed td{
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* Same radius for ACTIVE/INACTIVE as other UI elements */
-  .status-pill{
-    border-radius: 10px; /* same family as buttons/headers */
-  }
-
-  /* The header cell above DELETE should be transparent/white */
-  .refined-table thead th.th-blank{
-    background: transparent !important;
-    color: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-  }
-
 </style>
