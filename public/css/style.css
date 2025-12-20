@@ -1653,3 +1653,10 @@ button,
 .users-btn--yellow { background: #f5c400; }
 .users-btn--green  { background: #1f7d1f; }
 .users-btn--red    { background: #e11919; }
+.topbar-inner {
+  display: flex;
+  align-items: center;
+
+  /* 👇 DIT IS DE AFSTAND TUSSEN LOGO EN KNOPPEN */
+  gap: 30px;   /* ← pas dit getal aan */
+}
