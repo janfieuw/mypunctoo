@@ -3,6 +3,9 @@
 const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
 const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
 
+// =========================
+// Auth + Fetch
+// =========================
 function getAuthToken() {
   try {
     return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
@@ -27,16 +30,21 @@ async function requireSessionOrRedirect() {
 
   const res = await apiFetch("/api/me", { cache: "no-cache" });
   if (!res.ok) {
-    try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {}
     window.location.href = "/login";
     return false;
   }
   return true;
 }
 
+// =========================
+// View Loader
+// =========================
 async function loadView(viewName) {
   try {
-    // ✅ IMPORTANT: absolute path so it works from /app as wellL
+    // ✅ IMPORTANT: absolute path so it works from /app as well
     const response = await fetch(`/views/${viewName}.html`, { cache: "no-cache" });
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
@@ -61,7 +69,6 @@ function initTabs() {
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.view;
-
       if (!target) return;
 
       buttons.forEach((b) => {
@@ -82,11 +89,16 @@ function initLogout() {
     try {
       await apiFetch("/api/logout", { method: "POST" });
     } catch {}
-    try { window.localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {}
     window.location.href = "/login";
   });
 }
 
+// =========================
+// Subscription (UI-only)
+// =========================
 function loadSubscriptionStatus() {
   try {
     const raw = window.localStorage.getItem(SUBSCRIPTION_STATUS_KEY);
@@ -184,6 +196,9 @@ function initSubscriptionControls() {
   }
 }
 
+// =========================
+// Router init
+// =========================
 function initView(viewName) {
   applySubscriptionStatus(loadSubscriptionStatus());
 
@@ -215,6 +230,9 @@ document.addEventListener("DOMContentLoaded", () => {
   })();
 });
 
+// =========================
+// Dashboard
+// =========================
 async function hydrateDashboard() {
   try {
     const res = await apiFetch("/api/stats", { cache: "no-cache" });
@@ -234,6 +252,9 @@ async function hydrateDashboard() {
   }
 }
 
+// =========================
+// Client record
+// =========================
 async function hydrateClientRecord() {
   try {
     const res = await apiFetch("/api/company", { cache: "no-cache" });
@@ -252,17 +273,11 @@ async function hydrateClientRecord() {
     set("cr-vat", c.vatNumber);
 
     // Registered address
-    const regAddrLines = [
-      c.street,
-      `${c.postalCode || ""} ${c.city || ""}`.trim(),
-      c.country
-    ].filter(Boolean);
+    const regAddrLines = [c.street, `${c.postalCode || ""} ${c.city || ""}`.trim(), c.country].filter(Boolean);
 
     const regEl = document.getElementById("cr-registered-address");
     if (regEl) {
-      regEl.innerHTML = regAddrLines.length
-        ? regAddrLines.map(l => `${escapeHtml(l)}<br>`).join("")
-        : "–";
+      regEl.innerHTML = regAddrLines.length ? regAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
     }
 
     // Main contact
@@ -282,9 +297,7 @@ async function hydrateClientRecord() {
 
     const delAddrEl = document.getElementById("cr-delivery-address");
     if (delAddrEl) {
-      delAddrEl.innerHTML = delAddrLines.length
-        ? delAddrLines.map(l => `${escapeHtml(l)}<br>`).join("")
-        : "–";
+      delAddrEl.innerHTML = delAddrLines.length ? delAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
     }
 
     // Delivery contact (always fallback)
@@ -301,6 +314,9 @@ async function hydrateClientRecord() {
   }
 }
 
+// =========================
+// Users helpers
+// =========================
 function usersSetError(msg) {
   const el = document.getElementById("users-error");
   if (!el) return;
@@ -352,9 +368,9 @@ async function usersFetchEmployees() {
   return data.employees || [];
 }
 
-// =========================================================
-// Expected schedule (per employee)
-// =========================================================
+// =========================
+// Expected schedule (MINUTES UI)
+// =========================
 const WEEKDAYS = [
   { key: 1, label: "MONDAY" },
   { key: 2, label: "TUESDAY" },
@@ -365,26 +381,17 @@ const WEEKDAYS = [
   { key: 0, label: "SUNDAY" }
 ];
 
-let scheduleModalState = {
-  isOpen: false,
-  employeeId: null,
-  employeeName: "",
-  rows: [] // { weekday, expected_minutes, break_minutes }
-};
+let currentScheduleEmployeeId = null;
 
 function openScheduleModal(employeeId, employeeName) {
   const modal = document.getElementById("schedule-modal");
   if (!modal) return;
 
-  scheduleModalState.isOpen = true;
-  scheduleModalState.employeeId = employeeId;
-  scheduleModalState.employeeName = employeeName || "";
+  currentScheduleEmployeeId = Number(employeeId);
 
   const title = document.getElementById("schedule-modal-title");
   if (title) {
-    title.textContent = employeeName
-      ? `Expected working hours — ${employeeName}`
-      : "Expected working hours";
+    title.textContent = `Expected working minutes — ${employeeName || ""}`.trim();
   }
 
   scheduleSetError("");
@@ -396,43 +403,28 @@ function closeScheduleModal() {
   const modal = document.getElementById("schedule-modal");
   if (!modal) return;
 
-  scheduleModalState.isOpen = false;
-  scheduleModalState.employeeId = null;
-  scheduleModalState.employeeName = "";
-  scheduleModalState.rows = [];
-
+  currentScheduleEmployeeId = null;
   scheduleSetError("");
   modal.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-open");
 }
 
-function hoursToMinutes(hours) {
-  const h = Number(hours);
-  if (!Number.isFinite(h) || h < 0) return 0;
-  return Math.round(h * 60);
-}
-
-function minutesToHours(minutes) {
-  const m = Number(minutes);
-  if (!Number.isFinite(m) || m <= 0) return 0;
-  return Math.round((m / 60) * 100) / 100;
-}
-
 async function fetchExpectedSchedule(employeeId) {
-  const res = await apiFetch(`/api/employees/${encodeURIComponent(employeeId)}/expected-schedule`, { cache: "no-cache" });
+  const res = await apiFetch(`/api/employees/${employeeId}/expected-schedule`, { cache: "no-cache" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) throw new Error(data.error || "Could not load schedule");
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not load expected schedule");
   return data.schedule || [];
 }
 
-async function saveExpectedSchedule(employeeId, scheduleRows) {
-  const res = await apiFetch(`/api/employees/${encodeURIComponent(employeeId)}/expected-schedule`, {
+async function saveExpectedSchedule(employeeId, schedule) {
+  const res = await apiFetch(`/api/employees/${employeeId}/expected-schedule`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ schedule: scheduleRows })
+    body: JSON.stringify({ schedule })
   });
+
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) throw new Error(data.error || "Could not save schedule");
+  if (!res.ok || !data.ok) throw new Error(data.error || "Could not save expected schedule");
   return data.schedule || [];
 }
 
@@ -441,7 +433,7 @@ function renderScheduleTable(scheduleRows) {
   if (!tbody) return;
 
   const mapByDay = new Map();
-  (scheduleRows || []).forEach(r => {
+  (scheduleRows || []).forEach((r) => {
     mapByDay.set(Number(r.weekday), {
       weekday: Number(r.weekday),
       expected_minutes: Number(r.expected_minutes || 0),
@@ -449,23 +441,25 @@ function renderScheduleTable(scheduleRows) {
     });
   });
 
-  const rowsHtml = WEEKDAYS.map(d => {
-    const existing = mapByDay.get(d.key) || { weekday: d.key, expected_minutes: 0, break_minutes: 0 };
-    const expectedHours = minutesToHours(existing.expected_minutes);
-    const breakMin = Number(existing.break_minutes || 0);
+  tbody.innerHTML = WEEKDAYS.map((d) => {
+    const row = mapByDay.get(d.key) || {
+      weekday: d.key,
+      expected_minutes: 0,
+      break_minutes: 0
+    };
 
     return `
-      <tr data-weekday="${escapeHtml(d.key)}">
+      <tr data-weekday="${d.key}">
         <td><strong>${escapeHtml(d.label)}</strong></td>
         <td>
           <input
             class="users-input"
             type="number"
             min="0"
-            step="0.25"
-            value="${escapeHtml(expectedHours)}"
-            data-field="hours"
-            style="max-width: 140px;"
+            step="5"
+            value="${escapeHtml(row.expected_minutes)}"
+            data-field="expected"
+            style="max-width:160px;"
           />
         </td>
         <td>
@@ -474,16 +468,14 @@ function renderScheduleTable(scheduleRows) {
             type="number"
             min="0"
             step="5"
-            value="${escapeHtml(breakMin)}"
+            value="${escapeHtml(row.break_minutes)}"
             data-field="break"
-            style="max-width: 140px;"
+            style="max-width:160px;"
           />
         </td>
       </tr>
     `;
-  });
-
-  tbody.innerHTML = rowsHtml.join("");
+  }).join("");
 }
 
 function collectScheduleFromModal() {
@@ -491,25 +483,69 @@ function collectScheduleFromModal() {
   if (!tbody) return [];
 
   const out = [];
-  const trs = tbody.querySelectorAll("tr[data-weekday]");
-  trs.forEach(tr => {
-    const weekday = Number(tr.getAttribute("data-weekday"));
-    const hoursEl = tr.querySelector("input[data-field='hours']");
-    const breakEl = tr.querySelector("input[data-field='break']");
-
-    const hours = hoursEl ? Number(hoursEl.value) : 0;
-    const br = breakEl ? Number(breakEl.value) : 0;
+  tbody.querySelectorAll("tr[data-weekday]").forEach((tr) => {
+    const weekday = Number(tr.dataset.weekday);
+    const expected = Number(tr.querySelector("input[data-field='expected']")?.value || 0);
+    const br = Number(tr.querySelector("input[data-field='break']")?.value || 0);
 
     out.push({
       weekday,
-      expected_minutes: hoursToMinutes(hours),
-      break_minutes: Number.isFinite(br) && br > 0 ? Math.round(br) : 0
+      expected_minutes: expected,
+      break_minutes: br
     });
   });
 
   return out;
 }
 
+function attachScheduleModalHandlersOnce() {
+  const modal = document.getElementById("schedule-modal");
+  if (!modal || modal.dataset.bound === "1") return;
+
+  const closeBtn = document.getElementById("schedule-close");
+  const saveBtn = document.getElementById("schedule-save");
+  const backdrop = modal.querySelector(".modal-backdrop");
+
+  if (closeBtn) closeBtn.addEventListener("click", closeScheduleModal);
+  if (backdrop) backdrop.addEventListener("click", closeScheduleModal);
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      if (!currentScheduleEmployeeId) return;
+
+      scheduleSetError("");
+      saveBtn.disabled = true;
+
+      try {
+        const schedule = collectScheduleFromModal();
+
+        // basic client-side validation (server also validates)
+        for (const r of schedule) {
+          if (r.break_minutes > r.expected_minutes) {
+            throw new Error("Break cannot exceed expected minutes.");
+          }
+          if (r.expected_minutes < 0 || r.break_minutes < 0) {
+            throw new Error("Minutes cannot be negative.");
+          }
+        }
+
+        const saved = await saveExpectedSchedule(currentScheduleEmployeeId, schedule);
+        renderScheduleTable(saved);
+      } catch (err) {
+        console.warn(err);
+        scheduleSetError(err?.message || "Something went wrong.");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  modal.dataset.bound = "1";
+}
+
+// =========================
+// Users table
+// =========================
 async function usersRenderEmployees() {
   const tbody = document.getElementById("users-tbody");
   if (!tbody) return;
@@ -536,14 +572,18 @@ async function usersRenderEmployees() {
 
     const toggleLabel = isInactive ? "SET ACTIVE" : "SET INACTIVE";
 
-    const scheduleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="schedule" data-id="${escapeHtml(id)}" data-name="${escapeHtml(fullName)}">SCHEDULE</button>`;
+    const scheduleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="schedule" data-id="${escapeHtml(
+      id
+    )}" data-name="${escapeHtml(fullName)}">EXPECTED WORKING MINUTES</button>`;
 
     // Delete is only allowed when there are NO punches
     const deleteBtn = hasPunches
       ? `<button class="users-btn users-btn--disabled" type="button" disabled title="Not allowed after first scan.">DELETE</button>`
       : `<button class="users-btn users-btn--danger" type="button" data-action="delete" data-id="${escapeHtml(id)}">DELETE</button>`;
 
-    const toggleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="toggle" data-id="${escapeHtml(id)}" data-next="${escapeHtml(isInactive ? "active" : "inactive")}">${escapeHtml(toggleLabel)}</button>`;
+    const toggleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="toggle" data-id="${escapeHtml(
+      id
+    )}" data-next="${escapeHtml(isInactive ? "active" : "inactive")}">${escapeHtml(toggleLabel)}</button>`;
 
     const actions = `<div class="users-actions">${scheduleBtn}${toggleBtn}${deleteBtn}</div>`;
 
@@ -574,26 +614,16 @@ async function usersRenderEmployees() {
 
     try {
       if (action === "schedule") {
-        const name = btn.dataset.name || "";
-        btn.disabled = true;
+        attachScheduleModalHandlersOnce();
+        openScheduleModal(id, btn.dataset.name || "");
 
-        try {
-          openScheduleModal(id, name);
-
-          const tbodySched = document.getElementById("schedule-tbody");
-          if (tbodySched) tbodySched.innerHTML = `<tr><td colspan="3" class="table-empty">Loading…</td></tr>`;
-
-          const schedule = await fetchExpectedSchedule(id);
-          scheduleModalState.rows = schedule;
-
-          renderScheduleTable(schedule);
-        } catch (err) {
-          console.warn(err);
-          scheduleSetError(err?.message || "Could not load schedule.");
-        } finally {
-          btn.disabled = false;
+        const scheduleTbody = document.getElementById("schedule-tbody");
+        if (scheduleTbody) {
+          scheduleTbody.innerHTML = `<tr><td colspan="3" class="table-empty">Loading…</td></tr>`;
         }
 
+        const rows = await fetchExpectedSchedule(id);
+        renderScheduleTable(rows);
         return;
       }
 
@@ -639,6 +669,9 @@ async function usersRenderEmployees() {
   };
 }
 
+// =========================
+// Device links
+// =========================
 async function devicesFetchBindings() {
   const res = await apiFetch("/api/devices", { cache: "no-cache" });
   const data = await res.json().catch(() => ({}));
@@ -720,52 +753,14 @@ async function devicesRenderBindings() {
   };
 }
 
+// =========================
+// Users view hydrate
+// =========================
 async function hydrateUsers() {
   try {
     usersSetError("");
     devicesSetError("");
     scheduleSetError("");
-
-    // Schedule modal wiring
-    const schedModal = document.getElementById("schedule-modal");
-    const schedClose = document.getElementById("schedule-close");
-    const schedSave = document.getElementById("schedule-save");
-
-    if (schedClose) schedClose.onclick = closeScheduleModal;
-    if (schedModal) {
-      const backdrop = schedModal.querySelector(".modal-backdrop");
-      if (backdrop) backdrop.onclick = closeScheduleModal;
-    }
-
-    if (schedSave) {
-      schedSave.onclick = async () => {
-        if (!scheduleModalState.employeeId) return;
-
-        scheduleSetError("");
-        schedSave.disabled = true;
-
-        try {
-          const rows = collectScheduleFromModal();
-
-          // Basic sanity: break cannot exceed expected minutes
-          for (const r of rows) {
-            if (Number(r.break_minutes) > Number(r.expected_minutes)) {
-              throw new Error("Break cannot be longer than expected working time.");
-            }
-          }
-
-          const saved = await saveExpectedSchedule(scheduleModalState.employeeId, rows);
-          scheduleModalState.rows = saved;
-
-          closeScheduleModal();
-        } catch (err) {
-          console.warn(err);
-          scheduleSetError(err?.message || "Could not save schedule.");
-        } finally {
-          schedSave.disabled = false;
-        }
-      };
-    }
 
     // Create form handler
     const form = document.getElementById("employee-create-form");
@@ -816,6 +811,8 @@ async function hydrateUsers() {
       };
     }
 
+    attachScheduleModalHandlersOnce();
+
     await usersRenderEmployees();
     await devicesRenderBindings();
   } catch (e) {
@@ -824,6 +821,9 @@ async function hydrateUsers() {
   }
 }
 
+// =========================
+// Utils
+// =========================
 function escapeHtml(str) {
   return String(str || "")
     .replaceAll("&", "&amp;")

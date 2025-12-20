@@ -10,32 +10,16 @@
       <div class="users-form-grid">
         <div class="users-field">
           <label class="users-label" for="emp-first">FIRST NAME</label>
-          <input
-            id="emp-first"
-            class="users-input"
-            type="text"
-            placeholder="E.G. PIET"
-            required
-          />
+          <input id="emp-first" class="users-input" type="text" placeholder="E.G. PIET" required />
         </div>
 
         <div class="users-field">
           <label class="users-label" for="emp-last">LAST NAME</label>
-          <input
-            id="emp-last"
-            class="users-input"
-            type="text"
-            placeholder="E.G. JANSENS"
-            required
-          />
+          <input id="emp-last" class="users-input" type="text" placeholder="E.G. JANSENS" required />
         </div>
 
         <div class="users-field users-field--actions">
-          <button
-            id="employee-create-btn"
-            class="users-btn users-btn--primary"
-            type="submit"
-          >
+          <button id="employee-create-btn" class="users-btn users-btn--primary" type="submit">
             ADD EMPLOYEE
           </button>
         </div>
@@ -90,20 +74,22 @@
   </table>
 </section>
 
-<!-- =======================================================
+<!-- =========================
      Schedule modal
-     ======================================================= -->
+     ========================= -->
 <div id="schedule-modal" class="modal" aria-hidden="true">
   <div class="modal-backdrop"></div>
 
   <div class="modal-card">
     <div class="modal-header">
-      <h2 class="modal-title" id="schedule-modal-title">Expected working hours</h2>
-      <button id="schedule-close" class="users-btn users-btn--secondary" type="button">CLOSE</button>
+      <h2 class="modal-title" id="schedule-modal-title">Expected working minutes</h2>
+      <button id="schedule-close" class="users-btn users-btn--secondary" type="button">
+        CLOSE
+      </button>
     </div>
 
     <p class="card-text" style="margin-top: 0;">
-      Configure the expected working hours and break per day for this employee.
+      Configure the expected working minutes and break per day for this employee.
     </p>
 
     <p id="schedule-error" class="users-error" aria-live="polite"></p>
@@ -113,7 +99,7 @@
         <thead>
           <tr>
             <th>Day</th>
-            <th>Expected hours</th>
+            <th>Expected minutes</th>
             <th>Break (min)</th>
           </tr>
         </thead>
@@ -125,9 +111,37 @@
       </table>
     </div>
 
-    <div class="users-actions" style="justify-content: flex-end; margin-top: 12px;">
-      <button id="schedule-save" class="users-btn users-btn--primary" type="button">SAVE</button>
+    <div class="users-actions" style="justify-content:flex-end;margin-top:12px;">
+      <button id="schedule-save" class="users-btn users-btn--primary" type="button">
+        SAVE
+      </button>
     </div>
   </div>
 </div>
+
+<style>
+/* ===== Modal fix ===== */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1001;
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 720px;
+  margin: 6vh auto;
+  padding: 20px;
+}
+</style>
 
