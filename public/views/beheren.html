@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Beheren</title>
+  <style>
+    .card { padding: 22px; border-radius: 12px; }
+    .card-title { font-size: 28px; margin: 0 0 14px 0; }
+    .card-text { margin: 0 0 16px 0; line-height: 1.5; opacity: 0.9; }
+
+    .users-error { color: #e11919; font-weight: 700; margin: 8px 0 0 0; }
+    .table-wrap { overflow-x: auto; }
+
+    table.table { width: 100%; border-collapse: separate; border-spacing: 10px 8px; }
+    table.table thead th {
+      background: #4a4a4a;
+      color: #fff;
+      padding: 4px 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    table.table tbody td {
+      font-size: 12px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .table-empty { opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <h1 class="card-title">Beheren</h1>
+    <p class="card-text">
+      Device links — this overview shows which work device is currently linked to which employee.
+      Use <strong>UNLINK</strong> when a phone is handed over to another employee.
+    </p>
+
+    <p id="devices-error" class="users-error" aria-live="polite"></p>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>DEVICE</th>
+            <th>EMPLOYEE CODE</th>
+            <th>NAME</th>
+            <th>LAST SEEN</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody id="devices-tbody">
+          <tr>
+            <td colspan="5" class="table-empty">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</body>
+</html>

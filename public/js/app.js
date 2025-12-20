@@ -214,8 +214,14 @@ function initView(viewName) {
     hydrateClientRecord();
   }
 
+  // Employees page (ONLY employees)
   if (viewName === "users") {
     hydrateUsers();
+  }
+
+  // ✅ New: "Beheren" page (ONLY device links)
+  if (viewName === "beheren") {
+    hydrateBeheren();
   }
 }
 
@@ -391,12 +397,15 @@ function openScheduleModal(employeeId, employeeName) {
 
   const title = document.getElementById("schedule-modal-title");
   if (title) {
-    title.textContent = `Expected working minutes — ${employeeName || ""}`.trim();
+    title.textContent = `WORKING SCHEDULE (MINUTES) — ${employeeName || ""}`.trim();
   }
 
   scheduleSetError("");
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
+
+  // If your HTML uses .modal.open instead of aria-hidden, keep both compatible:
+  modal.classList.add("open");
 }
 
 function closeScheduleModal() {
@@ -407,6 +416,7 @@ function closeScheduleModal() {
   scheduleSetError("");
   modal.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-open");
+  modal.classList.remove("open");
 }
 
 async function fetchExpectedSchedule(employeeId) {
@@ -498,6 +508,18 @@ function collectScheduleFromModal() {
   return out;
 }
 
+function isScheduleNonZero(scheduleRows) {
+  return (scheduleRows || []).some((r) => Number(r.expected_minutes || 0) > 0 || Number(r.break_minutes || 0) > 0);
+}
+
+function emptyScheduleRows() {
+  return WEEKDAYS.map((d) => ({
+    weekday: d.key,
+    expected_minutes: 0,
+    break_minutes: 0
+  }));
+}
+
 function attachScheduleModalHandlersOnce() {
   const modal = document.getElementById("schedule-modal");
   if (!modal || modal.dataset.bound === "1") return;
@@ -522,7 +544,7 @@ function attachScheduleModalHandlersOnce() {
         // basic client-side validation (server also validates)
         for (const r of schedule) {
           if (r.break_minutes > r.expected_minutes) {
-            throw new Error("Break cannot exceed expected minutes.");
+            throw new Error("Break cannot exceed work minutes.");
           }
           if (r.expected_minutes < 0 || r.break_minutes < 0) {
             throw new Error("Minutes cannot be negative.");
@@ -531,6 +553,9 @@ function attachScheduleModalHandlersOnce() {
 
         const saved = await saveExpectedSchedule(currentScheduleEmployeeId, schedule);
         renderScheduleTable(saved);
+
+        // Refresh employees list so the "WORKING SCHEDULE" status/buttons update
+        await usersRenderEmployees();
       } catch (err) {
         console.warn(err);
         scheduleSetError(err?.message || "Something went wrong.");
@@ -544,18 +569,73 @@ function attachScheduleModalHandlersOnce() {
 }
 
 // =========================
-// Users table
+// Create schedule payload from Users (optional at creation)
+// The HTML (users.html) exposes: window.__getCreateEmployeeSchedulePayloadOrNull
+// returning { mon: {work_minutes, break_minutes}, ... } OR null.
+// =========================
+function mapCreateScheduleToApiRows(createScheduleObj) {
+  // createScheduleObj keys are: mon,tue,wed,thu,fri,sat,sun
+  // API expects: [{weekday: 1..6,0, expected_minutes, break_minutes}]
+  const dayToWeekday = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
+
+  const out = [];
+  if (!createScheduleObj || typeof createScheduleObj !== "object") return out;
+
+  for (const [dayKey, v] of Object.entries(createScheduleObj)) {
+    const weekday = dayToWeekday[String(dayKey).toLowerCase()];
+    if (weekday === undefined) continue;
+
+    const expected = Number(v?.work_minutes || 0);
+    const br = Number(v?.break_minutes || 0);
+
+    out.push({
+      weekday,
+      expected_minutes: Number.isFinite(expected) ? Math.max(0, expected) : 0,
+      break_minutes: Number.isFinite(br) ? Math.max(0, br) : 0
+    });
+  }
+
+  // Ensure all weekdays exist (optional; server can also handle partial)
+  const by = new Map(out.map((r) => [r.weekday, r]));
+  WEEKDAYS.forEach((d) => {
+    if (!by.has(d.key)) {
+      out.push({ weekday: d.key, expected_minutes: 0, break_minutes: 0 });
+    }
+  });
+
+  return out;
+}
+
+function employeeHasWorkingSchedule(employee) {
+  // Best-effort across possible API fields
+  if (!employee || typeof employee !== "object") return false;
+
+  if (employee.has_working_schedule === true) return true;
+  if (employee.has_expected_schedule === true) return true;
+  if (employee.expected_schedule_present === true) return true;
+  if (employee.working_schedule_present === true) return true;
+
+  // If the API returns the schedule inline (some versions do)
+  const inline = employee.expected_schedule || employee.working_schedule;
+  if (Array.isArray(inline)) return isScheduleNonZero(inline);
+  if (inline && typeof inline === "object" && Object.keys(inline).length) return true;
+
+  return false;
+}
+
+// =========================
+// Users table (Employees page)
 // =========================
 async function usersRenderEmployees() {
   const tbody = document.getElementById("users-tbody");
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="5" class="table-empty">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" class="table-empty">Loading…</td></tr>`;
 
   const employees = await usersFetchEmployees();
 
   if (!employees.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">No employees yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="table-empty">No employees yet.</td></tr>`;
     return;
   }
 
@@ -564,36 +644,46 @@ async function usersRenderEmployees() {
     const code = e.employee_code || "";
     const fullName = `${e.first_name || ""} ${e.last_name || ""}`.trim();
 
-    // Creation date is automatic -> show created_at
     const created = formatDateISO(e.created_at) || "–";
 
     const hasPunches = !!e.has_punches;
     const isInactive = normalizeLower(e.status) === "inactive";
 
-    const toggleLabel = isInactive ? "SET ACTIVE" : "SET INACTIVE";
+    const schedulePresent = employeeHasWorkingSchedule(e);
 
-    const scheduleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="schedule" data-id="${escapeHtml(
-      id
-    )}" data-name="${escapeHtml(fullName)}">EXPECTED WORKING MINUTES</button>`;
+    // Status button shown as a big pill in your HTML/CSS; we keep existing badges too
+    const statusHtml = `<span class="${escapeHtml(statusBadgeClass(e.status))}">${escapeHtml(statusLabel(e.status))}</span>`;
+
+    // WORKING SCHEDULE column: ADD / ADDED-VIEW / REMOVE
+    const addOrViewBtn = schedulePresent
+      ? `<button class="users-btn users-btn--green" type="button" data-action="schedule" data-id="${escapeHtml(
+          id
+        )}" data-name="${escapeHtml(fullName)}">ADDED/VIEW</button>`
+      : `<button class="users-btn users-btn--white" type="button" data-action="schedule" data-id="${escapeHtml(
+          id
+        )}" data-name="${escapeHtml(fullName)}">ADD</button>`;
+
+    const removeScheduleBtn = schedulePresent
+      ? `<button class="users-btn users-btn--red" type="button" data-action="remove-schedule" data-id="${escapeHtml(
+          id
+        )}" data-name="${escapeHtml(fullName)}">REMOVE WORKING SCHEDULE</button>`
+      : ``;
+
+    const scheduleActions = `<div class="users-actions">${addOrViewBtn}${removeScheduleBtn}</div>`;
 
     // Delete is only allowed when there are NO punches
     const deleteBtn = hasPunches
-      ? `<button class="users-btn users-btn--disabled" type="button" disabled title="Not allowed after first scan.">DELETE</button>`
-      : `<button class="users-btn users-btn--danger" type="button" data-action="delete" data-id="${escapeHtml(id)}">DELETE</button>`;
-
-    const toggleBtn = `<button class="users-btn users-btn--secondary" type="button" data-action="toggle" data-id="${escapeHtml(
-      id
-    )}" data-next="${escapeHtml(isInactive ? "active" : "inactive")}">${escapeHtml(toggleLabel)}</button>`;
-
-    const actions = `<div class="users-actions">${scheduleBtn}${toggleBtn}${deleteBtn}</div>`;
+      ? `<span class="muted-note">RAW DATA PRESENT</span>`
+      : `<button class="users-btn users-btn--red" type="button" data-action="delete" data-id="${escapeHtml(id)}">DELETE</button>`;
 
     return `
       <tr>
         <td>${escapeHtml(code)}</td>
         <td>${escapeHtml(fullName)}</td>
-        <td><span class="${escapeHtml(statusBadgeClass(e.status))}">${escapeHtml(statusLabel(e.status))}</span></td>
+        <td>${statusHtml}</td>
         <td>${escapeHtml(created)}</td>
-        <td>${actions}</td>
+        <td>${scheduleActions}</td>
+        <td>${deleteBtn}</td>
       </tr>
     `;
   });
@@ -627,7 +717,21 @@ async function usersRenderEmployees() {
         return;
       }
 
+      if (action === "remove-schedule") {
+        const ok = window.confirm("Remove working schedule? This is always allowed.");
+        if (!ok) return;
+
+        btn.disabled = true;
+
+        // We "remove" by saving all zeros
+        await saveExpectedSchedule(id, emptyScheduleRows());
+
+        await usersRenderEmployees();
+        return;
+      }
+
       if (action === "toggle") {
+        // (Kept for compatibility if your HTML still includes toggle buttons somewhere)
         const next = btn.dataset.next || "";
         btn.disabled = true;
 
@@ -641,7 +745,6 @@ async function usersRenderEmployees() {
         if (!r.ok || !j.ok) throw new Error(j.error || "Could not update status");
 
         await usersRenderEmployees();
-        await devicesRenderBindings();
         return;
       }
 
@@ -670,7 +773,7 @@ async function usersRenderEmployees() {
 }
 
 // =========================
-// Device links
+// Device links (Beheren page)
 // =========================
 async function devicesFetchBindings() {
   const res = await apiFetch("/api/devices", { cache: "no-cache" });
@@ -754,12 +857,11 @@ async function devicesRenderBindings() {
 }
 
 // =========================
-// Users view hydrate
+// Users view hydrate (Employees page ONLY)
 // =========================
 async function hydrateUsers() {
   try {
     usersSetError("");
-    devicesSetError("");
     scheduleSetError("");
 
     // Create form handler
@@ -784,24 +886,43 @@ async function hydrateUsers() {
         if (btn) btn.disabled = true;
 
         try {
+          // 1) Create employee
           const r = await apiFetch("/api/employees", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              first_name,
-              last_name
-            })
+            body: JSON.stringify({ first_name, last_name })
           });
 
           const j = await r.json().catch(() => ({}));
           if (!r.ok || !j.ok) throw new Error(j.error || "Could not create employee");
+
+          const createdEmployeeId = j.employee?.id ?? j.id ?? null;
+
+          // 2) Optional: add schedule at creation (default: none)
+          // The users.html page provides a helper function; if not present, we skip safely.
+          const getCreateScheduleFn = window.__getCreateEmployeeSchedulePayloadOrNull;
+          if (createdEmployeeId && typeof getCreateScheduleFn === "function") {
+            const createScheduleObj = getCreateScheduleFn(); // null or object
+            if (createScheduleObj) {
+              const apiRows = mapCreateScheduleToApiRows(createScheduleObj);
+
+              // Validation similar to modal
+              for (const row of apiRows) {
+                if (row.break_minutes > row.expected_minutes) {
+                  throw new Error("BREAK MINUTES cannot exceed WORK MINUTES.");
+                }
+              }
+
+              // Save schedule
+              await saveExpectedSchedule(createdEmployeeId, apiRows);
+            }
+          }
 
           // reset
           if (firstEl) firstEl.value = "";
           if (lastEl) lastEl.value = "";
 
           await usersRenderEmployees();
-          await devicesRenderBindings();
         } catch (err) {
           console.warn(err);
           usersSetError(err?.message || "Something went wrong.");
@@ -812,12 +933,23 @@ async function hydrateUsers() {
     }
 
     attachScheduleModalHandlersOnce();
-
     await usersRenderEmployees();
+  } catch (e) {
+    console.warn(e);
+    usersSetError(e?.message || "Could not load employees.");
+  }
+}
+
+// =========================
+// Beheren view hydrate (Device links ONLY)
+// =========================
+async function hydrateBeheren() {
+  try {
+    devicesSetError("");
     await devicesRenderBindings();
   } catch (e) {
     console.warn(e);
-    usersSetError(e?.message || "Could not load users.");
+    devicesSetError(e?.message || "Could not load device links.");
   }
 }
 
