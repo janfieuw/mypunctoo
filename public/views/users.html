@@ -42,11 +42,11 @@
       </colgroup>
       <thead>
         <tr>
-          <th>Employee code</th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Creation date</th>
-          <th>Working schedule</th>
+          <th><div class="th-pill">Employee code</div></th>
+          <th><div class="th-pill">Name</div></th>
+          <th><div class="th-pill">Status</div></th>
+          <th><div class="th-pill">Creation date</div></th>
+          <th><div class="th-pill">Working schedule</div></th>
           <th class="th-blank"></th>
         </tr>
       </thead>
@@ -302,6 +302,33 @@
   }
 
   /* The header cell above DELETE should be transparent/white */
+  .refined-table thead th.th-blank{
+    background: transparent !important;
+    color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+
+  /* Header pills that fill the full column width (so header == cell width visually) */
+  .refined-table thead th{
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+  .refined-table thead .th-pill{
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 6px 10px;
+    font-size: 12px;
+    letter-spacing: .25px;
+    font-weight: 900;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
   .refined-table thead th.th-blank{
     background: transparent !important;
     color: transparent !important;
