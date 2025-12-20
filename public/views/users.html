@@ -1,368 +1,178 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Employees</title>
-  <style>
-    .card { padding: 22px; border-radius: 12px; }
-    .card-title { font-size: 28px; margin: 0 0 14px 0; }
-    .card-text { margin: 0 0 16px 0; line-height: 1.5; opacity: 0.9; }
+<section class="card">
+  <h1 class="card-title">Employees</h1>
 
-    .employees-intro {
-      margin: 6px 0 18px 0;
-      font-size: 12px;
-      line-height: 1.65;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      opacity: 0.9;
-      white-space: pre-line;
-    }
+  <div class="employees-intro">
+    LEES AANDACHTIG VOOR CORRECTE WERKING VAN PUNCTOO:<br>
+    VOEG WERKNEMERS TOE DIE GEBRUIK MAKEN VAN PUNCTOO.<br>
+    NA DE EERSTE SCAN KUNNEN DE WERKNEMERS NIET MEER VERWIJDERD WORDEN: RAW DATA PRESENT.<br>
+    OM EEN CORRECT OVERZICHT TE BEWAREN KUN JE PER WERKNEMER DE STATUS WIJZIGEN VAN ACTIVE NAAR INACTIVE.<br>
+    DE RUWE DATA DIE WORDT BIJGEHOUDEN IS DE EMPLOYEE CODE, HET TIJDSTIP VAN DE IN-SCAN EN HET TIJDSTIP VAN DE OUT-SCAN.<br>
+    VOOR HET RAPPORT MET AUTOMATISCHE BEREKENING VAN OVER-TIME KUN JE ALS OPTIE GEBRUIK MAKEN VAN WORKING SCHEDULES.<br>
+    WORKING SCHEDULES KUNNEN STEEDS VERWIJDERD WORDEN.<br>
+    WERKNEMERS ZONDER TOEGEVOEGD WORKING SCHEDULE ZULLEN NIET OPGNOMEN WORDEN IN HET RAPPORT.
+  </div>
 
-    .users-form-inline {
-      display: flex;
-      align-items: flex-end;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin: 10px 0 12px 0;
-    }
-    .users-field-inline { display: flex; flex-direction: column; gap: 6px; }
-    .users-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
-    .users-input {
-      height: 26px;
-      padding: 2px 8px;
-      border: 1px solid rgba(0,0,0,0.35);
-      border-radius: 0;
-      width: 190px;
-      outline: none;
-    }
-    .users-btn {
-      height: 28px;
-      padding: 0 16px;
-      border-radius: 0;
-      border: 1px solid rgba(0,0,0,0.55);
-      cursor: pointer;
-      font-weight: 700;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      font-size: 12px;
-    }
-    .users-btn--yellow { background: #f5c400; color: #000; }
-    .users-btn--gray { background: #e9e9e9; color: #000; }
-    .users-btn--red { background: #e11919; color: #fff; border-color: #7a0b0b; }
-
-    .create-schedule-box{
-      margin: 6px 0 18px 0;
-      padding: 10px 12px;
-      border: 1px solid rgba(0,0,0,0.18);
-      background: rgba(0,0,0,0.02);
-      max-width: 920px;
-    }
-    .create-schedule-head{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-    .create-schedule-title{
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-size: 12px;
-    }
-    .create-schedule-sub{
-      font-size: 12px;
-      opacity: 0.85;
-      margin-top: 2px;
-      text-transform: uppercase;
-      letter-spacing: 0.35px;
-    }
-    .toggle-row{
-      display:flex;
-      align-items:center;
-      gap: 8px;
-      cursor:pointer;
-      user-select:none;
-      font-weight: 800;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.4px;
-      white-space: nowrap;
-    }
-    .schedule-grid{
-      display:grid;
-      grid-template-columns: 90px 160px 160px;
-      gap: 10px 14px;
-      align-items:center;
-      margin-top: 8px;
-    }
-    .schedule-grid .head{
-      font-weight: 900;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.4px;
-      opacity: 0.9;
-    }
-    .schedule-grid .day{
-      font-weight: 900;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.4px;
-      opacity: 0.9;
-    }
-    .schedule-grid input{
-      height: 26px;
-      padding: 2px 8px;
-      border: 1px solid rgba(0,0,0,0.35);
-      border-radius: 0;
-      width: 100%;
-      outline: none;
-    }
-    .muted-note { opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
-
-    .users-error { color: #e11919; font-weight: 700; margin: 8px 0 0 0; }
-    .table-wrap { overflow-x: auto; }
-
-    table.table { width: 100%; border-collapse: separate; border-spacing: 10px 8px; }
-    table.table thead th {
-      background: #4a4a4a;
-      color: #fff;
-      padding: 4px 10px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      text-align: left;
-      white-space: nowrap;
-    }
-    table.table tbody td {
-      font-size: 12px;
-      vertical-align: middle;
-      white-space: nowrap;
-    }
-    .table-empty { opacity: 0.7; }
-
-    /* Modal (compatible with existing JS if you already have it) */
-    .modal { position: fixed; inset: 0; display: none; z-index: 1000; }
-    .modal.open { display: block; }
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); }
-    .modal-card {
-      position: relative;
-      z-index: 1001;
-      background: #fff;
-      border-radius: 12px;
-      max-width: 780px;
-      margin: 6vh auto;
-      padding: 18px;
-    }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .modal-title { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
-  </style>
-</head>
-
-<body>
-  <section class="card">
-    <h1 class="card-title">Employees</h1>
-
-    <div class="employees-intro">
-LEES AANDACHTIG VOOR CORRECTE WERKING VAN PUNCTOO:
-VOEG WERKNEMERS TOE DIE GEBRUIK MAKEN VAN PUNCTOO.
-NA DE EERSTE SCAN KUNNEN DE WERKNEMERS NIET MEER VERWIJDERD WORDEN: RAW DATA PRESENT.
-OM EEN CORRECT OVERZICHT TE BEWAREN KUN JE PER WERKNEMER DE STATUS WIJZIGEN VAN ACTIVE NAAR INACTIVE.
-DE RUWE DATA DIE WORDT BIJGEHOUDEN IS DE EMPLOYEE CODE, HET TIJDSTIP VAN DE IN-SCAN EN HET TIJDSTIP VAN DE OUT-SCAN.
-VOOR HET RAPPORT MET AUTOMATISCHE BEREKENING VAN OVER-TIME KUN JE ALS OPTIE GEBRUIK MAKEN VAN WORKING SCHEDULES.
-WORKING SCHEDULES KUNNEN STEEDS VERWIJDERD WORDEN.
-WERKNEMERS ZONDER TOEGEVOEGD WORKING SCHEDULE ZULLEN NIET OPGNOMEN WORDEN IN HET RAPPORT.
+  <form id="employee-create-form" class="users-form-inline" autocomplete="off">
+    <div class="users-field-inline">
+      <label class="users-label" for="emp-first">FIRST NAME:</label>
+      <input id="emp-first" class="users-input" type="text" required />
     </div>
 
-    <form id="employee-create-form" class="users-form-inline" autocomplete="off">
-      <div class="users-field-inline">
-        <label class="users-label" for="emp-first">FIRST NAME:</label>
-        <input id="emp-first" class="users-input" type="text" required />
-      </div>
-
-      <div class="users-field-inline">
-        <label class="users-label" for="emp-last">LAST NAME:</label>
-        <input id="emp-last" class="users-input" type="text" required />
-      </div>
-
-      <button id="employee-create-btn" class="users-btn users-btn--yellow" type="submit">ADD EMPLOYEE</button>
-    </form>
-
-    <!-- Optional schedule at creation (default OFF) -->
-    <div class="create-schedule-box">
-      <div class="create-schedule-head">
-        <div>
-          <div class="create-schedule-title">WORKING SCHEDULE (OPTIONAL)</div>
-          <div class="create-schedule-sub">FREE CHOICE — ONLY FOR INTERNAL REPORTS — DOES NOT AFFECT REGISTRATIONS</div>
-        </div>
-
-        <label class="toggle-row">
-          <input id="addScheduleToggle" type="checkbox" />
-          <span>ADD WORKING SCHEDULE</span>
-        </label>
-      </div>
-
-      <div id="scheduleSection" style="display:none;">
-        <div class="schedule-grid">
-          <div class="head">DAY</div>
-          <div class="head">WORK MINUTES</div>
-          <div class="head">BREAK MINUTES</div>
-
-          <div class="day">MON</div>
-          <input class="sched-work" data-day="mon" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="mon" type="number" min="0" value="0" />
-
-          <div class="day">TUE</div>
-          <input class="sched-work" data-day="tue" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="tue" type="number" min="0" value="0" />
-
-          <div class="day">WED</div>
-          <input class="sched-work" data-day="wed" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="wed" type="number" min="0" value="0" />
-
-          <div class="day">THU</div>
-          <input class="sched-work" data-day="thu" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="thu" type="number" min="0" value="0" />
-
-          <div class="day">FRI</div>
-          <input class="sched-work" data-day="fri" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="fri" type="number" min="0" value="0" />
-
-          <div class="day">SAT</div>
-          <input class="sched-work" data-day="sat" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="sat" type="number" min="0" value="0" />
-
-          <div class="day">SUN</div>
-          <input class="sched-work" data-day="sun" type="number" min="0" value="0" />
-          <input class="sched-break" data-day="sun" type="number" min="0" value="0" />
-        </div>
-
-        <div class="muted-note" style="margin-top:8px;">
-          ALL VALUES IN MINUTES — LEAVE 0 IF NOT APPLICABLE
-        </div>
-      </div>
+    <div class="users-field-inline">
+      <label class="users-label" for="emp-last">LAST NAME:</label>
+      <input id="emp-last" class="users-input" type="text" required />
     </div>
 
-    <p id="users-error" class="users-error" aria-live="polite"></p>
+    <button id="employee-create-btn" class="users-btn users-btn--yellow" type="submit">ADD EMPLOYEE</button>
+  </form>
 
-    <div class="table-wrap" style="margin-top:10px;">
+  <p id="users-error" class="users-error" aria-live="polite"></p>
+
+  <div class="table-wrap" style="margin-top:10px;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>EMPLOYEE CODE</th>
+          <th>NAME</th>
+          <th>STATUS</th>
+          <th>CREATION DATE</th>
+          <th>WORKING SCHEDULE</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr>
+          <td colspan="6" class="table-empty">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Schedule modal -->
+<div id="schedule-modal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop"></div>
+
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title" id="schedule-modal-title">WORKING SCHEDULE (MINUTES)</h2>
+      <button id="schedule-close" class="users-btn users-btn--gray" type="button">CLOSE</button>
+    </div>
+
+    <p class="card-text" style="margin-top: 10px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px;">
+      Optional. Used only for internal reports. Does not affect time registrations.
+    </p>
+
+    <p id="schedule-error" class="users-error" aria-live="polite"></p>
+
+    <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
-            <th>EMPLOYEE CODE</th>
-            <th>NAME</th>
-            <th>STATUS</th>
-            <th>CREATION DATE</th>
-            <th>WORKING SCHEDULE</th>
-            <th></th>
+            <th>DAY</th>
+            <th>WORK MINUTES</th>
+            <th>BREAK MINUTES</th>
           </tr>
         </thead>
-        <tbody id="users-tbody">
+        <tbody id="schedule-tbody">
           <tr>
-            <td colspan="6" class="table-empty">Loading…</td>
+            <td colspan="3" class="table-empty">Loading…</td>
           </tr>
         </tbody>
       </table>
     </div>
-  </section>
 
-  <!-- Schedule modal (kept for your existing add/view/remove flow) -->
-  <div id="schedule-modal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 class="modal-title" id="schedule-modal-title">WORKING SCHEDULE (MINUTES)</h2>
-        <button id="schedule-close" class="users-btn users-btn--gray" type="button">CLOSE</button>
-      </div>
-
-      <p class="card-text" style="margin-top: 10px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px;">
-        Optional. Used only for internal reports. Does not affect time registrations.
-      </p>
-
-      <p id="schedule-error" class="users-error" aria-live="polite"></p>
-
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>DAY</th>
-              <th>WORK MINUTES</th>
-              <th>BREAK MINUTES</th>
-            </tr>
-          </thead>
-          <tbody id="schedule-tbody">
-            <tr>
-              <td colspan="3" class="table-empty">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; margin-top:12px;">
-        <button id="schedule-save" class="users-btn users-btn--yellow" type="button">SAVE</button>
-      </div>
+    <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+      <button id="schedule-save" class="users-btn users-btn--yellow" type="button">SAVE</button>
     </div>
   </div>
+</div>
 
-  <script>
-    const addScheduleToggle = document.getElementById("addScheduleToggle");
-    const scheduleSection = document.getElementById("scheduleSection");
+<style>
+  /* Match your screenshot look without fighting your global CSS */
+  .employees-intro{
+    margin: 6px 0 18px 0;
+    font-size: 12px;
+    line-height: 1.65;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    opacity: 0.9;
+  }
 
-    function resetScheduleInputs() {
-      document.querySelectorAll(".sched-work, .sched-break").forEach((el) => {
-        el.value = "0";
-      });
-    }
+  .users-form-inline {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 10px 0 18px 0;
+  }
+  .users-field-inline { display: flex; flex-direction: column; gap: 6px; }
+  .users-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
+  .users-input {
+    height: 26px;
+    padding: 2px 8px;
+    border: 1px solid rgba(0,0,0,0.35);
+    border-radius: 0;
+    width: 190px;
+    outline: none;
+  }
+  .users-btn {
+    height: 28px;
+    padding: 0 16px;
+    border-radius: 0;
+    border: 1px solid rgba(0,0,0,0.55);
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-size: 12px;
+  }
+  .users-btn--yellow { background: #f5c400; color: #000; }
+  .users-btn--gray { background: #e9e9e9; color: #000; }
+  .users-btn--green { background: #1f7d1f; color: #fff; border-color: #0f3f0f; }
+  .users-btn--red { background: #e11919; color: #fff; border-color: #7a0b0b; }
+  .users-btn--white { background: #fff; color: #000; }
 
-    function getSchedulePayloadOrNull() {
-      if (!addScheduleToggle || !addScheduleToggle.checked) return null;
+  .users-actions { display:flex; gap: 10px; align-items:center; }
+  .users-error { color: #e11919; font-weight: 700; margin: 8px 0 0 0; }
+  .muted-note { opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
 
-      const schedule = {};
-      const workEls = document.querySelectorAll(".sched-work");
-      const breakEls = document.querySelectorAll(".sched-break");
+  .table-wrap { overflow-x: auto; }
+  table.table { width: 100%; border-collapse: separate; border-spacing: 10px 8px; }
+  table.table thead th {
+    background: #4a4a4a;
+    color: #fff;
+    padding: 4px 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  table.table tbody td { font-size: 12px; vertical-align: middle; white-space: nowrap; }
+  .table-empty { opacity: 0.7; }
 
-      workEls.forEach((el) => {
-        const day = el.dataset.day;
-        const val = Number(el.value || 0);
-        schedule[day] = schedule[day] || {};
-        schedule[day].work_minutes = Number.isFinite(val) ? Math.max(0, val) : 0;
-      });
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    height: 22px;
+    padding: 0 10px;
+    border: 1px solid rgba(0,0,0,0.75);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .status-pill.active { background: #1f7d1f; color: #fff; border-color: #0f3f0f; }
+  .status-pill.inactive { background: #fff; color: #9a9a9a; border-color: rgba(0,0,0,0.35); }
 
-      breakEls.forEach((el) => {
-        const day = el.dataset.day;
-        const val = Number(el.value || 0);
-        schedule[day] = schedule[day] || {};
-        schedule[day].break_minutes = Number.isFinite(val) ? Math.max(0, val) : 0;
-      });
-
-      const hasAnyMinutes = Object.values(schedule).some(
-        (d) => (d.work_minutes || 0) > 0 || (d.break_minutes || 0) > 0
-      );
-      if (!hasAnyMinutes) return null;
-
-      return schedule;
-    }
-
-    if (addScheduleToggle && scheduleSection) {
-      scheduleSection.style.display = "none";
-      addScheduleToggle.checked = false;
-
-      addScheduleToggle.addEventListener("change", () => {
-        if (addScheduleToggle.checked) {
-          scheduleSection.style.display = "block";
-        } else {
-          scheduleSection.style.display = "none";
-          resetScheduleInputs();
-        }
-      });
-    }
-
-    // Expose helper so your existing create-employee code can use it:
-    // payload.work_schedule = window.__getCreateEmployeeSchedulePayloadOrNull()
-    window.__getCreateEmployeeSchedulePayloadOrNull = getSchedulePayloadOrNull;
-  </script>
-</body>
-</html>
+  .modal { position: fixed; inset: 0; display: none; z-index: 1000; }
+  .modal.open { display: block; }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); }
+  .modal-card { position: relative; z-index: 1001; background: #fff; border-radius: 12px; max-width: 780px; margin: 6vh auto; padding: 18px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .modal-title { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>

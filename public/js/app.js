@@ -44,7 +44,6 @@ async function requireSessionOrRedirect() {
 // =========================
 async function loadView(viewName) {
   try {
-    // ✅ IMPORTANT: absolute path so it works from /app as well
     const response = await fetch(`/views/${viewName}.html`, { cache: "no-cache" });
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
@@ -214,12 +213,12 @@ function initView(viewName) {
     hydrateClientRecord();
   }
 
-  // Employees page (ONLY employees)
+  // Employees page
   if (viewName === "users") {
     hydrateUsers();
   }
 
-  // ✅ New: "Beheren" page (ONLY device links)
+  // Linked devices page (Beheren)
   if (viewName === "beheren") {
     hydrateBeheren();
   }
@@ -280,7 +279,6 @@ async function hydrateClientRecord() {
 
     // Registered address
     const regAddrLines = [c.street, `${c.postalCode || ""} ${c.city || ""}`.trim(), c.country].filter(Boolean);
-
     const regEl = document.getElementById("cr-registered-address");
     if (regEl) {
       regEl.innerHTML = regAddrLines.length ? regAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
@@ -293,7 +291,7 @@ async function hydrateClientRecord() {
     set("cr-invoice-email", c.invoiceEmail || "");
     set("cr-billing-ref", c.billingReference || "–");
 
-    // ✅ Delivery address: ALWAYS show an address (API guarantees it, but we keep UI fallback too)
+    // Delivery (always)
     const del = c.delivery || {};
     const delAddrLines = [
       del.street || c.street,
@@ -306,10 +304,8 @@ async function hydrateClientRecord() {
       delAddrEl.innerHTML = delAddrLines.length ? delAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
     }
 
-    // Delivery contact (always fallback)
     set("cr-delivery-contact", c.deliveryContactPerson || c.registeredContactPerson || "–");
 
-    // Subscription meta
     const metaEl = document.getElementById("client-status-meta");
     if (metaEl) {
       metaEl.innerHTML = `Subscription no.: <strong>${escapeHtml(c.subscriptionNumber || "–")}</strong><br>
@@ -351,20 +347,12 @@ function normalizeLower(str) {
 
 function formatDateISO(d) {
   if (!d) return "";
-  // API returns dates as "YYYY-MM-DD..." (date or ISO)
   const s = String(d);
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
 function statusLabel(status) {
-  const s = normalizeLower(status);
-  if (s === "inactive") return "INACTIVE";
-  return "ACTIVE";
-}
-
-function statusBadgeClass(status) {
-  const s = normalizeLower(status);
-  return s === "inactive" ? "badge badge--inactive" : "badge badge--active";
+  return normalizeLower(status) === "inactive" ? "INACTIVE" : "ACTIVE";
 }
 
 async function usersFetchEmployees() {
@@ -375,7 +363,7 @@ async function usersFetchEmployees() {
 }
 
 // =========================
-// Expected schedule (MINUTES UI)
+// Expected working schedule (MINUTES UI)
 // =========================
 const WEEKDAYS = [
   { key: 1, label: "MONDAY" },
@@ -403,8 +391,6 @@ function openScheduleModal(employeeId, employeeName) {
   scheduleSetError("");
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
-
-  // If your HTML uses .modal.open instead of aria-hidden, keep both compatible:
   modal.classList.add("open");
 }
 
@@ -452,36 +438,18 @@ function renderScheduleTable(scheduleRows) {
   });
 
   tbody.innerHTML = WEEKDAYS.map((d) => {
-    const row = mapByDay.get(d.key) || {
-      weekday: d.key,
-      expected_minutes: 0,
-      break_minutes: 0
-    };
+    const row = mapByDay.get(d.key) || { weekday: d.key, expected_minutes: 0, break_minutes: 0 };
 
     return `
       <tr data-weekday="${d.key}">
         <td><strong>${escapeHtml(d.label)}</strong></td>
         <td>
-          <input
-            class="users-input"
-            type="number"
-            min="0"
-            step="5"
-            value="${escapeHtml(row.expected_minutes)}"
-            data-field="expected"
-            style="max-width:160px;"
-          />
+          <input class="users-input" type="number" min="0" step="5"
+            value="${escapeHtml(row.expected_minutes)}" data-field="expected" style="max-width:160px;" />
         </td>
         <td>
-          <input
-            class="users-input"
-            type="number"
-            min="0"
-            step="5"
-            value="${escapeHtml(row.break_minutes)}"
-            data-field="break"
-            style="max-width:160px;"
-          />
+          <input class="users-input" type="number" min="0" step="5"
+            value="${escapeHtml(row.break_minutes)}" data-field="break" style="max-width:160px;" />
         </td>
       </tr>
     `;
@@ -497,27 +465,14 @@ function collectScheduleFromModal() {
     const weekday = Number(tr.dataset.weekday);
     const expected = Number(tr.querySelector("input[data-field='expected']")?.value || 0);
     const br = Number(tr.querySelector("input[data-field='break']")?.value || 0);
-
-    out.push({
-      weekday,
-      expected_minutes: expected,
-      break_minutes: br
-    });
+    out.push({ weekday, expected_minutes: expected, break_minutes: br });
   });
 
   return out;
 }
 
-function isScheduleNonZero(scheduleRows) {
-  return (scheduleRows || []).some((r) => Number(r.expected_minutes || 0) > 0 || Number(r.break_minutes || 0) > 0);
-}
-
 function emptyScheduleRows() {
-  return WEEKDAYS.map((d) => ({
-    weekday: d.key,
-    expected_minutes: 0,
-    break_minutes: 0
-  }));
+  return WEEKDAYS.map((d) => ({ weekday: d.key, expected_minutes: 0, break_minutes: 0 }));
 }
 
 function attachScheduleModalHandlersOnce() {
@@ -541,21 +496,16 @@ function attachScheduleModalHandlersOnce() {
       try {
         const schedule = collectScheduleFromModal();
 
-        // basic client-side validation (server also validates)
         for (const r of schedule) {
-          if (r.break_minutes > r.expected_minutes) {
-            throw new Error("Break cannot exceed work minutes.");
-          }
-          if (r.expected_minutes < 0 || r.break_minutes < 0) {
-            throw new Error("Minutes cannot be negative.");
-          }
+          if (r.break_minutes > r.expected_minutes) throw new Error("BREAK MINUTES cannot exceed WORK MINUTES.");
+          if (r.expected_minutes < 0 || r.break_minutes < 0) throw new Error("Minutes cannot be negative.");
         }
 
-        const saved = await saveExpectedSchedule(currentScheduleEmployeeId, schedule);
-        renderScheduleTable(saved);
+        await saveExpectedSchedule(currentScheduleEmployeeId, schedule);
 
-        // Refresh employees list so the "WORKING SCHEDULE" status/buttons update
+        // Refresh list so "ADD" becomes "ADDED/VIEW"
         await usersRenderEmployees();
+        closeScheduleModal();
       } catch (err) {
         console.warn(err);
         scheduleSetError(err?.message || "Something went wrong.");
@@ -568,58 +518,9 @@ function attachScheduleModalHandlersOnce() {
   modal.dataset.bound = "1";
 }
 
-// =========================
-// Create schedule payload from Users (optional at creation)
-// The HTML (users.html) exposes: window.__getCreateEmployeeSchedulePayloadOrNull
-// returning { mon: {work_minutes, break_minutes}, ... } OR null.
-// =========================
-function mapCreateScheduleToApiRows(createScheduleObj) {
-  // createScheduleObj keys are: mon,tue,wed,thu,fri,sat,sun
-  // API expects: [{weekday: 1..6,0, expected_minutes, break_minutes}]
-  const dayToWeekday = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
-
-  const out = [];
-  if (!createScheduleObj || typeof createScheduleObj !== "object") return out;
-
-  for (const [dayKey, v] of Object.entries(createScheduleObj)) {
-    const weekday = dayToWeekday[String(dayKey).toLowerCase()];
-    if (weekday === undefined) continue;
-
-    const expected = Number(v?.work_minutes || 0);
-    const br = Number(v?.break_minutes || 0);
-
-    out.push({
-      weekday,
-      expected_minutes: Number.isFinite(expected) ? Math.max(0, expected) : 0,
-      break_minutes: Number.isFinite(br) ? Math.max(0, br) : 0
-    });
-  }
-
-  // Ensure all weekdays exist (optional; server can also handle partial)
-  const by = new Map(out.map((r) => [r.weekday, r]));
-  WEEKDAYS.forEach((d) => {
-    if (!by.has(d.key)) {
-      out.push({ weekday: d.key, expected_minutes: 0, break_minutes: 0 });
-    }
-  });
-
-  return out;
-}
-
 function employeeHasWorkingSchedule(employee) {
-  // Best-effort across possible API fields
-  if (!employee || typeof employee !== "object") return false;
-
-  if (employee.has_working_schedule === true) return true;
-  if (employee.has_expected_schedule === true) return true;
-  if (employee.expected_schedule_present === true) return true;
-  if (employee.working_schedule_present === true) return true;
-
-  // If the API returns the schedule inline (some versions do)
-  const inline = employee.expected_schedule || employee.working_schedule;
-  if (Array.isArray(inline)) return isScheduleNonZero(inline);
-  if (inline && typeof inline === "object" && Object.keys(inline).length) return true;
-
+  // Server now provides this flag (recommended)
+  if (employee && employee.has_working_schedule === true) return true;
   return false;
 }
 
@@ -643,35 +544,33 @@ async function usersRenderEmployees() {
     const id = e.id;
     const code = e.employee_code || "";
     const fullName = `${e.first_name || ""} ${e.last_name || ""}`.trim();
-
     const created = formatDateISO(e.created_at) || "–";
 
     const hasPunches = !!e.has_punches;
-    const isInactive = normalizeLower(e.status) === "inactive";
+    const currentStatus = normalizeLower(e.status) === "inactive" ? "inactive" : "active";
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
 
     const schedulePresent = employeeHasWorkingSchedule(e);
 
-    // Status button shown as a big pill in your HTML/CSS; we keep existing badges too
-    const statusHtml = `<span class="${escapeHtml(statusBadgeClass(e.status))}">${escapeHtml(statusLabel(e.status))}</span>`;
+    // STATUS: clickable pill (ACTIVE/INACTIVE)
+    const statusBtn = `
+      <button class="status-pill ${currentStatus}" type="button"
+        data-action="toggle-status" data-id="${escapeHtml(id)}" data-next="${escapeHtml(nextStatus)}">
+        ${escapeHtml(statusLabel(currentStatus))}
+      </button>
+    `;
 
     // WORKING SCHEDULE column: ADD / ADDED-VIEW / REMOVE
     const addOrViewBtn = schedulePresent
-      ? `<button class="users-btn users-btn--green" type="button" data-action="schedule" data-id="${escapeHtml(
-          id
-        )}" data-name="${escapeHtml(fullName)}">ADDED/VIEW</button>`
-      : `<button class="users-btn users-btn--white" type="button" data-action="schedule" data-id="${escapeHtml(
-          id
-        )}" data-name="${escapeHtml(fullName)}">ADD</button>`;
+      ? `<button class="users-btn users-btn--green" type="button" data-action="schedule" data-id="${escapeHtml(id)}" data-name="${escapeHtml(fullName)}">ADDED/VIEW</button>`
+      : `<button class="users-btn users-btn--white" type="button" data-action="schedule" data-id="${escapeHtml(id)}" data-name="${escapeHtml(fullName)}">ADD</button>`;
 
     const removeScheduleBtn = schedulePresent
-      ? `<button class="users-btn users-btn--red" type="button" data-action="remove-schedule" data-id="${escapeHtml(
-          id
-        )}" data-name="${escapeHtml(fullName)}">REMOVE WORKING SCHEDULE</button>`
+      ? `<button class="users-btn users-btn--red" type="button" data-action="remove-schedule" data-id="${escapeHtml(id)}" data-name="${escapeHtml(fullName)}">REMOVE WORKING SCHEDULE</button>`
       : ``;
 
     const scheduleActions = `<div class="users-actions">${addOrViewBtn}${removeScheduleBtn}</div>`;
 
-    // Delete is only allowed when there are NO punches
     const deleteBtn = hasPunches
       ? `<span class="muted-note">RAW DATA PRESENT</span>`
       : `<button class="users-btn users-btn--red" type="button" data-action="delete" data-id="${escapeHtml(id)}">DELETE</button>`;
@@ -680,7 +579,7 @@ async function usersRenderEmployees() {
       <tr>
         <td>${escapeHtml(code)}</td>
         <td>${escapeHtml(fullName)}</td>
-        <td>${statusHtml}</td>
+        <td>${statusBtn}</td>
         <td>${escapeHtml(created)}</td>
         <td>${scheduleActions}</td>
         <td>${deleteBtn}</td>
@@ -690,15 +589,16 @@ async function usersRenderEmployees() {
 
   tbody.innerHTML = rows.join("");
 
-  // Attach click handlers (event delegation)
+  // Event delegation
   tbody.onclick = async (ev) => {
-    const btn = ev.target && ev.target.closest && ev.target.closest("button[data-action]");
+    const target = ev.target;
+    if (!target) return;
+
+    const btn = target.closest ? target.closest("[data-action]") : null;
     if (!btn) return;
 
-    const action = btn.dataset.action;
+    const action = btn.dataset.action || "";
     const id = btn.dataset.id;
-
-    if (!id) return;
 
     usersSetError("");
 
@@ -708,9 +608,7 @@ async function usersRenderEmployees() {
         openScheduleModal(id, btn.dataset.name || "");
 
         const scheduleTbody = document.getElementById("schedule-tbody");
-        if (scheduleTbody) {
-          scheduleTbody.innerHTML = `<tr><td colspan="3" class="table-empty">Loading…</td></tr>`;
-        }
+        if (scheduleTbody) scheduleTbody.innerHTML = `<tr><td colspan="3" class="table-empty">Loading…</td></tr>`;
 
         const rows = await fetchExpectedSchedule(id);
         renderScheduleTable(rows);
@@ -722,17 +620,15 @@ async function usersRenderEmployees() {
         if (!ok) return;
 
         btn.disabled = true;
-
-        // We "remove" by saving all zeros
         await saveExpectedSchedule(id, emptyScheduleRows());
-
         await usersRenderEmployees();
         return;
       }
 
-      if (action === "toggle") {
-        // (Kept for compatibility if your HTML still includes toggle buttons somewhere)
-        const next = btn.dataset.next || "";
+      if (action === "toggle-status") {
+        const next = normalizeLower(btn.dataset.next || "");
+        if (!["active", "inactive"].includes(next)) return;
+
         btn.disabled = true;
 
         const r = await apiFetch(`/api/employees/${id}/status`, {
@@ -857,14 +753,13 @@ async function devicesRenderBindings() {
 }
 
 // =========================
-// Users view hydrate (Employees page ONLY)
+// Users view hydrate
 // =========================
 async function hydrateUsers() {
   try {
     usersSetError("");
     scheduleSetError("");
 
-    // Create form handler
     const form = document.getElementById("employee-create-form");
     if (form) {
       form.onsubmit = async (ev) => {
@@ -886,7 +781,6 @@ async function hydrateUsers() {
         if (btn) btn.disabled = true;
 
         try {
-          // 1) Create employee
           const r = await apiFetch("/api/employees", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -896,29 +790,6 @@ async function hydrateUsers() {
           const j = await r.json().catch(() => ({}));
           if (!r.ok || !j.ok) throw new Error(j.error || "Could not create employee");
 
-          const createdEmployeeId = j.employee?.id ?? j.id ?? null;
-
-          // 2) Optional: add schedule at creation (default: none)
-          // The users.html page provides a helper function; if not present, we skip safely.
-          const getCreateScheduleFn = window.__getCreateEmployeeSchedulePayloadOrNull;
-          if (createdEmployeeId && typeof getCreateScheduleFn === "function") {
-            const createScheduleObj = getCreateScheduleFn(); // null or object
-            if (createScheduleObj) {
-              const apiRows = mapCreateScheduleToApiRows(createScheduleObj);
-
-              // Validation similar to modal
-              for (const row of apiRows) {
-                if (row.break_minutes > row.expected_minutes) {
-                  throw new Error("BREAK MINUTES cannot exceed WORK MINUTES.");
-                }
-              }
-
-              // Save schedule
-              await saveExpectedSchedule(createdEmployeeId, apiRows);
-            }
-          }
-
-          // reset
           if (firstEl) firstEl.value = "";
           if (lastEl) lastEl.value = "";
 
@@ -941,7 +812,7 @@ async function hydrateUsers() {
 }
 
 // =========================
-// Beheren view hydrate (Device links ONLY)
+// Beheren view hydrate
 // =========================
 async function hydrateBeheren() {
   try {

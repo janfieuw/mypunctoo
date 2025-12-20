@@ -267,14 +267,15 @@ async function ensureEmployeeExpectedScheduleTable() {
 }
 
 async function seedDefaultExpectedSchedule(client, companyId, employeeId) {
-  // Default: Mon-Fri 8h + 30 min break, Sat/Sun 0
+  // Default: NO schedule (all zeros).
+  // A schedule is considered "added" only when expected_minutes or break_minutes > 0 for at least one day.
   // weekday mapping: 1..5 => Mon..Fri, 6=Sat, 0=Sun
   const defaults = [
-    { weekday: 1, expected_minutes: 480, break_minutes: 30 },
-    { weekday: 2, expected_minutes: 480, break_minutes: 30 },
-    { weekday: 3, expected_minutes: 480, break_minutes: 30 },
-    { weekday: 4, expected_minutes: 480, break_minutes: 30 },
-    { weekday: 5, expected_minutes: 480, break_minutes: 30 },
+    { weekday: 1, expected_minutes: 0, break_minutes: 0 },
+    { weekday: 2, expected_minutes: 0, break_minutes: 0 },
+    { weekday: 3, expected_minutes: 0, break_minutes: 0 },
+    { weekday: 4, expected_minutes: 0, break_minutes: 0 },
+    { weekday: 5, expected_minutes: 0, break_minutes: 0 },
     { weekday: 6, expected_minutes: 0, break_minutes: 0 },
     { weekday: 0, expected_minutes: 0, break_minutes: 0 }
   ];
@@ -935,7 +936,15 @@ app.get('/api/employees', requireAuth, async (req, res) => {
            WHERE p.employee_id = e.id
              AND p.company_id = e.company_id
            LIMIT 1
-         ) AS has_punches
+         ) AS has_punches,
+         EXISTS (
+           SELECT 1
+           FROM employee_expected_schedule es
+           WHERE es.company_id = e.company_id
+             AND es.employee_id = e.id
+             AND (es.expected_minutes > 0 OR es.break_minutes > 0)
+           LIMIT 1
+         ) AS has_working_schedule
        FROM employees e
        WHERE e.company_id = $1
        ORDER BY e.last_name ASC, e.first_name ASC, e.id ASC`,
