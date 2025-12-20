@@ -25,6 +25,65 @@
         </div>
       </div>
 
+      <!-- =========================
+           OPTIONAL WORK SCHEDULE (DEFAULT: OFF)
+           ========================= -->
+      <div class="users-schedule-create">
+        <div class="users-schedule-head">
+          <div>
+            <div class="users-schedule-title">WORK SCHEDULE (OPTIONAL)</div>
+            <div class="users-schedule-sub">
+              Optional. Used only for internal reports. Does not affect time registrations.
+            </div>
+          </div>
+
+          <label class="users-schedule-toggle" for="emp-schedule-enabled">
+            <input id="emp-schedule-enabled" type="checkbox" />
+            <span>ADD WORK SCHEDULE</span>
+          </label>
+        </div>
+
+        <div class="users-schedule-help">
+          If enabled, set expected <strong>WORK MINUTES</strong> and <strong>BREAK MINUTES</strong> per day.
+          Leave a day at <strong>0</strong> if not applicable. All values are in minutes.
+        </div>
+
+        <!-- Hidden by default; show when toggle is enabled (handled in users/app JS) -->
+        <div id="emp-schedule-grid" class="users-schedule-grid" style="display:none;">
+          <div class="users-schedule-grid__head">DAY</div>
+          <div class="users-schedule-grid__head">WORK MINUTES</div>
+          <div class="users-schedule-grid__head">BREAK MINUTES</div>
+
+          <div class="users-schedule-grid__day">MON</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="mon" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="mon" />
+
+          <div class="users-schedule-grid__day">TUE</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="tue" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="tue" />
+
+          <div class="users-schedule-grid__day">WED</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="wed" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="wed" />
+
+          <div class="users-schedule-grid__day">THU</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="thu" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="thu" />
+
+          <div class="users-schedule-grid__day">FRI</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="fri" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="fri" />
+
+          <div class="users-schedule-grid__day">SAT</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="sat" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="sat" />
+
+          <div class="users-schedule-grid__day">SUN</div>
+          <input class="users-input emp-schedule-work" type="number" min="0" value="0" data-day="sun" />
+          <input class="users-input emp-schedule-break" type="number" min="0" value="0" data-day="sun" />
+        </div>
+      </div>
+
       <p id="users-error" class="users-error" aria-live="polite"></p>
     </form>
   </div>
@@ -35,16 +94,21 @@
         <th>Employee code</th>
         <th>Name</th>
         <th>Status</th>
+        <th>Schedule</th>
         <th>Creation date</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody id="users-tbody">
       <tr>
-        <td colspan="5" class="table-empty">Loading…</td>
+        <td colspan="6" class="table-empty">Loading…</td>
       </tr>
     </tbody>
   </table>
+
+  <p class="card-text" style="margin-top:10px; opacity:0.9;">
+    <strong>Schedule</strong> shows whether a work schedule was added for internal reporting (default: <strong>NO SCHEDULE</strong>).
+  </p>
 </section>
 
 <section class="card">
@@ -82,14 +146,14 @@
 
   <div class="modal-card">
     <div class="modal-header">
-      <h2 class="modal-title" id="schedule-modal-title">Expected working minutes</h2>
+      <h2 class="modal-title" id="schedule-modal-title">Work schedule (minutes)</h2>
       <button id="schedule-close" class="users-btn users-btn--secondary" type="button">
         CLOSE
       </button>
     </div>
 
     <p class="card-text" style="margin-top: 0;">
-      Configure the expected working minutes and break per day for this employee.
+      Optional. Used only for internal reports. Does not affect time registrations.
     </p>
 
     <p id="schedule-error" class="users-error" aria-live="polite"></p>
@@ -99,8 +163,8 @@
         <thead>
           <tr>
             <th>Day</th>
-            <th>Expected minutes</th>
-            <th>Break (min)</th>
+            <th>WORK MINUTES</th>
+            <th>BREAK MINUTES</th>
           </tr>
         </thead>
         <tbody id="schedule-tbody">
@@ -142,6 +206,66 @@
   max-width: 720px;
   margin: 6vh auto;
   padding: 20px;
+}
+
+/* ===== Optional schedule (create) ===== */
+.users-schedule-create{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.users-schedule-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.users-schedule-title{
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.users-schedule-sub{
+  font-size: 13px;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+.users-schedule-toggle{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+  font-weight: 600;
+}
+
+.users-schedule-help{
+  font-size: 13px;
+  opacity: 0.85;
+  margin-top: 8px;
+}
+
+.users-schedule-grid{
+  margin-top: 10px;
+  display:grid;
+  grid-template-columns: 120px 1fr 1fr;
+  gap: 10px;
+  align-items:center;
+}
+
+.users-schedule-grid__head{
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.users-schedule-grid__day{
+  font-weight: 600;
+  opacity: 0.95;
 }
 </style>
 
