@@ -1626,3 +1626,30 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 }
+/* ================================
+   GLOBAL BUTTON STYLE – MYPUNCTOO
+   ================================ */
+
+button,
+.users-btn,
+.nav-btn {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  border-radius: 10px; /* zelfde radius als users.html */
+}
+
+/* Optional: normalize height & padding */
+button,
+.users-btn,
+.nav-btn {
+  min-height: 26px;
+  padding: 4px 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Keep existing colors intact */
+.users-btn--yellow { background: #f5c400; }
+.users-btn--green  { background: #1f7d1f; }
+.users-btn--red    { background: #e11919; }
