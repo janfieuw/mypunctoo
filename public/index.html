@@ -14,28 +14,12 @@
   <link rel="stylesheet" href="/css/style.css">
 
   <style>
-    /* Per-page background IMAGE (set by app.js via CSS variables) */
+    /* Per-page background image behind the central card (no other changes) */
     .main{
       background-image: var(--page-bg-img, none);
       background-repeat: no-repeat;
-      background-size: var(--page-bg-size, cover);
       background-position: var(--page-bg-pos, center);
-      background-attachment: fixed;
-      transition: background-image 220ms ease, background-position 220ms ease;
-    }
-    /* Optional: subtle darkening to keep cards readable on busy photos */
-    .main::before{
-      content:"";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background: rgba(255,255,255,0.35);
-      /* If you prefer darker overlay, switch to rgba(0,0,0,0.25) */
-    }
-    /* Make sure content stays above overlay */
-    .topbar, .content{
-      position: relative;
-      z-index: 1;
+      background-size: var(--page-bg-size, cover);
     }
   </style>
 </head>

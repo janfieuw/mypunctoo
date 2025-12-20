@@ -1,106 +1,83 @@
-<section class="card" data-page-bg-img="/img/bg-employees.jpg" data-page-bg-pos="center" data-page-bg-size="cover">
+<section class="card" data-page-bg-img="" data-page-bg-pos="center" data-page-bg-size="cover">
   <h1 class="card-title">Employees</h1>
-  <p class="card-text">
-    Manage the employees of your company. Each employee has an employee code,
-    an automatically generated creation date, and an active / inactive status.
-  </p>
 
-  <div class="users-toolbar">
-    <form id="employee-create-form" class="users-form" autocomplete="off">
-      <div class="users-form-grid">
-        <div class="users-field">
-          <label class="users-label" for="emp-first">FIRST NAME</label>
-          <input id="emp-first" class="users-input" type="text" placeholder="E.G. PIET" required />
-        </div>
-
-        <div class="users-field">
-          <label class="users-label" for="emp-last">LAST NAME</label>
-          <input id="emp-last" class="users-input" type="text" placeholder="E.G. JANSENS" required />
-        </div>
-
-        <div class="users-field users-field--actions">
-          <button id="employee-create-btn" class="users-btn users-btn--primary" type="submit">
-            ADD EMPLOYEE
-          </button>
-        </div>
-      </div>
-
-      <p id="users-error" class="users-error" aria-live="polite"></p>
-    </form>
+  <!-- Info block (keeps original tone but more readable) -->
+  <div class="employees-intro">
+    <div class="employees-intro__title">PLEASE READ CAREFULLY FOR CORRECT OPERATION OF PUNCTOO:</div>
+    <ul class="employees-intro__list">
+      <li>Add employees who actively use Punctoo.</li>
+      <li>After the first scan, employees can no longer be deleted (<strong>RAW DATA PRESENT</strong>).</li>
+      <li>To maintain a correct overview, you can change an employee’s status from <strong>ACTIVE</strong> to <strong>INACTIVE</strong>.</li>
+      <li>The stored raw data consists of the <strong>Employee Code</strong>, the timestamp of the <strong>IN-scan</strong>, and the timestamp of the <strong>OUT-scan</strong>.</li>
+      <li>For the report with automatic <strong>Over-Time</strong> calculation, you can optionally use <strong>WORKING SCHEDULES</strong>.</li>
+      <li>Employees without an assigned <strong>WORKING SCHEDULE</strong> will not be included in the report.</li>
+      <li><strong>WORKING SCHEDULES</strong> can be added or removed at any time.</li>
+     
+      <li></li>
+    </ul>
   </div>
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Employee code</th>
-        <th>Name</th>
-        <th>Status</th>
-        <th>Creation date</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="users-tbody">
-      <tr>
-        <td colspan="5" class="table-empty">Loading…</td>
-      </tr>
-    </tbody>
-  </table>
+  <!-- Create employee (back to the original inline layout) -->
+  <form id="employee-create-form" class="users-form-inline" autocomplete="off">
+    <div class="users-field-inline">
+      <label class="users-label" for="emp-first">FIRST NAME:</label>
+      <input id="emp-first" class="users-input" type="text" required />
+    </div>
+
+    <div class="users-field-inline">
+      <label class="users-label" for="emp-last">LAST NAME:</label>
+      <input id="emp-last" class="users-input" type="text" required />
+    </div>
+
+    <button id="employee-create-btn" class="users-btn users-btn--yellow" type="submit">ADD EMPLOYEE</button>
+  </form>
+
+  <p id="users-error" class="users-error" aria-live="polite"></p>
+
+  <div class="table-wrap" style="margin-top:10px;">
+    <table class="table users-table">
+      <thead>
+        <tr>
+          <th>EMPLOYEE CODE</th>
+          <th>NAME</th>
+          <th>STATUS</th>
+          <th>CREATION DATE</th>
+          <th>WORKING SCHEDULE</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr>
+          <td colspan="6" class="table-empty">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 
-<section class="card">
-  <h1 class="card-title">Device links</h1>
-  <p class="card-text">
-    This overview shows which work device is currently linked to which employee.
-    Use <strong>UNLINK</strong> when a phone is handed over to another employee.
-  </p>
-
-  <p id="devices-error" class="users-error" aria-live="polite"></p>
-
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Device</th>
-        <th>Employee code</th>
-        <th>Name</th>
-        <th>Last seen</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="devices-tbody">
-      <tr>
-        <td colspan="5" class="table-empty">Loading…</td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-
-<!-- =========================
-     Schedule modal
-     ========================= -->
+<!-- Schedule modal -->
 <div id="schedule-modal" class="modal" aria-hidden="true">
   <div class="modal-backdrop"></div>
 
   <div class="modal-card">
     <div class="modal-header">
-      <h2 class="modal-title" id="schedule-modal-title">Expected working minutes</h2>
-      <button id="schedule-close" class="users-btn users-btn--secondary" type="button">
-        CLOSE
-      </button>
+      <h2 class="modal-title" id="schedule-modal-title">WORKING SCHEDULE (MINUTES)</h2>
+      <button id="schedule-close" class="users-btn users-btn--gray" type="button">CLOSE</button>
     </div>
 
-    <p class="card-text" style="margin-top: 0;">
-      Configure the expected working minutes and break per day for this employee.
+    <p class="modal-sub">
+      Optional. Used only for internal reports. Does not affect time registrations.
     </p>
 
     <p id="schedule-error" class="users-error" aria-live="polite"></p>
 
     <div class="table-wrap">
-      <table class="table">
+      <table class="table users-table users-table--modal">
         <thead>
           <tr>
-            <th>Day</th>
-            <th>Expected minutes</th>
-            <th>Break (min)</th>
+            <th>DAY</th>
+            <th>WORK MINUTES</th>
+            <th>BREAK MINUTES</th>
           </tr>
         </thead>
         <tbody id="schedule-tbody">
@@ -111,37 +88,226 @@
       </table>
     </div>
 
-    <div class="users-actions" style="justify-content:flex-end;margin-top:12px;">
-      <button id="schedule-save" class="users-btn users-btn--primary" type="button">
-        SAVE
-      </button>
+    <div class="modal-actions">
+      <button id="schedule-save" class="users-btn users-btn--yellow" type="button">SAVE</button>
     </div>
   </div>
 </div>
 
 <style>
-/* ===== Modal fix ===== */
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
+  /* ============ Typography ============ */
+  .employees-intro,
+  .employees-intro *,
+  .users-label,
+  .users-input,
+  .users-btn,
+  .users-table thead th,
+  .users-table tbody td,
+  .status-pill,
+  .modal-sub,
+  .modal-title {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  /* ============ Intro ============ */
+  .employees-intro{
+    margin: 6px 0 16px 0;
+    font-size: 12px;
+    line-height: 1.6;
+    letter-spacing: 0.25px;
+    opacity: 0.92;
+  }
+  .employees-intro__title{
+    font-weight: 900;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+  }
+  .employees-intro__list{
+    margin: 0;
+    padding-left: 18px;
+  }
+  .employees-intro__list li{
+    margin: 0 0 6px 0;
+  }
+
+  /* ============ Form (inline like before) ============ */
+  .users-form-inline{
+    display:flex;
+    align-items:flex-end;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 10px 0 14px 0;
+  }
+  .users-field-inline{
+    display:flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Requested: labels grey (not white) */
+  .users-label{
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    color: rgba(0,0,0,0.55);
+    font-weight: 700;
+  }
+
+  .users-input{
+    height: 26px;
+    padding: 2px 10px;
+    border: 1px solid rgba(0,0,0,0.25);
+    border-radius: 10px;
+    width: 210px;
+    outline: none;
+    letter-spacing: 0.25px;
+    text-transform: uppercase;
+    background: #fff;
+  }
+  .users-input:focus{
+    border-color: rgba(0,0,0,0.40);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  }
+
+  /* ============ Buttons (keep original feel) ============ */
+  .users-btn{
+    height: 28px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.45);
+    cursor: pointer;
+    font-weight: 900;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+    font-size: 12px;
+    background:#fff;
+  }
+  .users-btn--yellow{ background: #f5c400; color:#000; border-color: rgba(0,0,0,0.40); }
+  .users-btn--gray{ background: #efefef; color:#000; border-color: rgba(0,0,0,0.25); }
+  .users-btn--green{ background: #1f7d1f; color:#fff; border-color: #0f3f0f; }
+  .users-btn--red{ background: #e11919; color:#fff; border-color: #7a0b0b; }
+  .users-btn--white{ background: #fff; color:#000; }
+
+  .users-btn:disabled{ opacity: .55; cursor: not-allowed; }
+
+  .users-actions{ display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+
+  .users-error{ color:#b10f0f; font-weight: 900; margin: 6px 0 0 0; }
+
+  /* ============ Table ============ */
+  .table-wrap{ overflow-x:auto; }
+
+  table.users-table{
+    width: 100%;
+    border-collapse: collapse; /* stable, clean */
+  }
+
+  /* Requested: headers grey text, no background */
+  table.users-table thead th{
+    background: transparent;
+    color: rgba(0,0,0,0.55);
+    font-weight: 800;
+    letter-spacing: 0.25px;
+    text-transform: uppercase;
+    font-size: 11.5px;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    white-space: nowrap;
+  }
+
+  table.users-table tbody td{
+    padding: 12px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    vertical-align: middle;
+  }
+  table.users-table tbody tr:last-child td{
+    border-bottom: none;
+  }
+  .table-empty{ opacity: 0.65; padding: 14px 10px; }
+
+  .muted-note{
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.25px;
+    font-size: 12px;
+  }
+
+  /* Status pill (app.js uses .status-pill + active/inactive) */
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width: 110px;
+    height: 24px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.45);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #fff;
+  }
+  .status-pill.active{ background: #1f7d1f; color: #fff; border-color:#0f3f0f; }
+  .status-pill.inactive{ background:#fff; color: rgba(0,0,0,0.45); border-color: rgba(0,0,0,0.22); }
+
+  /* ============ Modal ============ */
+  .modal{ position: fixed; inset: 0; display: none; z-index: 1000; }
+  .modal.open{ display: block; }
+  .modal-backdrop{ position: fixed; inset: 0; background: rgba(0,0,0,0.55); }
+  .modal-card{
+    position: relative;
+    z-index: 1001;
+    background: #fff;
+    border-radius: 14px;
+    max-width: 820px;
+    margin: 6vh auto;
+    padding: 18px;
+    border: 1px solid rgba(0,0,0,0.10);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+  }
+  .modal-header{ display:flex; justify-content:space-between; align-items:center; gap: 10px; }
+  .modal-title{
+    margin: 0;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.25px;
+    text-transform: uppercase;
+  }
+  .modal-sub{
+    margin-top: 10px;
+    font-size: 12px;
+    opacity: 0.85;
+    letter-spacing: 0.2px;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    margin-top: 12px;
+  }
+  /* ===== INPUT TEXT COLOR FIX ===== */
+
+/* Default text in inputs */
+.users-input,
+.modal-card input {
+  color: rgba(0, 0, 0, 0.75);   /* leesbaar grijs */
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  z-index: 1000;
+/* Placeholder text */
+.users-input::placeholder,
+.modal-card input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
 }
 
-.modal-card {
-  position: relative;
-  z-index: 1001;
-  background: #ffffff;
-  border-radius: 12px;
-  max-width: 720px;
-  margin: 6vh auto;
-  padding: 20px;
+/* Focus state (optioneel maar netjes) */
+.users-input:focus,
+.modal-card input:focus {
+  color: rgba(0, 0, 0, 0.85);
 }
+
 </style>
-

@@ -42,13 +42,15 @@ async function requireSessionOrRedirect() {
 
 // =========================
 // Per-page background image
+// (reads data-page-bg-img from the loaded view and applies it to .main)
 // =========================
-function applyPageBackgroundImage() {
+function applyPageBgImage() {
   const el = document.querySelector("#app [data-page-bg-img]");
-  const img = el ? (el.getAttribute("data-page-bg-img") || "") : "";
+  const img = el ? (el.getAttribute("data-page-bg-img") || "").trim() : "";
   const pos = el ? (el.getAttribute("data-page-bg-pos") || "center") : "center";
   const size = el ? (el.getAttribute("data-page-bg-size") || "cover") : "cover";
 
+  // Empty => remove background
   document.documentElement.style.setProperty("--page-bg-img", img ? `url('${img}')` : "none");
   document.documentElement.style.setProperty("--page-bg-pos", pos);
   document.documentElement.style.setProperty("--page-bg-size", size);
@@ -64,7 +66,7 @@ async function loadView(viewName) {
     if (!response.ok) throw new Error(`Failed to load view: ${viewName}`);
     const html = await response.text();
     document.getElementById("app").innerHTML = html;
-    applyPageBackgroundImage();
+    applyPageBgImage();
     initView(viewName);
   } catch (err) {
     console.error(err);
