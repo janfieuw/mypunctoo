@@ -290,4 +290,24 @@
     justify-content:flex-end;
     margin-top: 12px;
   }
+  /* ===== INPUT TEXT COLOR FIX ===== */
+
+/* Default text in inputs */
+.users-input,
+.modal-card input {
+  color: rgba(0, 0, 0, 0.75);   /* leesbaar grijs */
+}
+
+/* Placeholder text */
+.users-input::placeholder,
+.modal-card input::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* Focus state (optioneel maar netjes) */
+.users-input:focus,
+.modal-card input:focus {
+  color: rgba(0, 0, 0, 0.85);
+}
+
 </style>
