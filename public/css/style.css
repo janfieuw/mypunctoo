@@ -1658,5 +1658,5 @@ button,
   align-items: center;
 
   /* 👇 DIT IS DE AFSTAND TUSSEN LOGO EN KNOPPEN */
-  gap: 30px;   /* ← pas dit getal aan */
+  gap: 20px;   /* ← pas dit getal aan */
 }
