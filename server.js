@@ -734,13 +734,33 @@ app.post('/api/signup/step3', async (req, res) => {
     await client.query('COMMIT');
 
     return res.json({ ok: true, redirectUrl: '/login' });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('signup step3 error:', err);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  } finally {
-    client.release();
-  }
+ } catch (err) {
+  await client.query('ROLLBACK');
+
+  // Log full details server-side
+  console.error('signup step3 error:', {
+    message: err?.message,
+    code: err?.code,
+    detail: err?.detail,
+    where: err?.where,
+    constraint: err?.constraint,
+    table: err?.table,
+    column: err?.column
+  });
+
+  // Return a useful message to the browser (TEMP for debugging)
+  return res.status(500).json({
+    ok: false,
+    error: err?.detail || err?.message || 'Server error.',
+    code: err?.code || null,
+    constraint: err?.constraint || null,
+    table: err?.table || null,
+    column: err?.column || null
+  });
+} finally {
+  client.release();
+}
+
 });
 
 // =========================================================
