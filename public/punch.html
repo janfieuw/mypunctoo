@@ -39,6 +39,15 @@
     <!-- Filled by JavaScript -->
   </div>
 
+  <!-- Plate verification (pattern check) -->
+  <div class="punch-status" id="plate-verify" hidden>
+    <p class="punch-text" id="plate-verify-text">Verifying plate…</p>
+    <video id="plate-video" playsinline autoplay muted class="plate-video" hidden></video>
+    <canvas id="plate-canvas" class="plate-canvas" hidden></canvas>
+    <button type="button" class="punch-button" id="plate-capture" hidden>Capture plate</button>
+    <button type="button" class="punch-button" id="plate-reset" hidden>Reset plate template</button>
+  </div>
+
   <!-- First-time link form -->
   <form class="punch-form" id="punch-form" autocomplete="off" hidden>
     <label class="punch-label" for="employee-id">
@@ -70,6 +79,9 @@
     // ------------------------------
     const DEVICE_USER_KEY = "mypunctoo_device_user";
     const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
+    const DEVICE_ID_KEY = "mypunctoo_device_id";
+    const PLATE_TEMPLATE_PREFIX = "mypunctoo_plate_template_";
+    const PLATE_THRESHOLD = 12; // Hamming distance threshold (lower = stricter)
 
     // ------------------------------
     // URL parameters: QR token + direction
@@ -115,6 +127,18 @@
         window.localStorage.setItem(DEVICE_USER_KEY, JSON.stringify(user));
       } catch (e) {
         console.warn("Could not store device user:", e);
+      }
+    }
+
+    function getOrCreateDeviceId() {
+      try {
+        const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+        if (existing) return existing;
+        const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("dev-" + Math.random().toString(16).slice(2) + Date.now());
+        window.localStorage.setItem(DEVICE_ID_KEY, id);
+        return id;
+      } catch {
+        return "";
       }
     }
 
@@ -193,24 +217,261 @@
           ${user.displayName}, you are <strong>${actionText}</strong> at <strong>${time}</strong>.
         </p>
         <p class="punch-text">
-          (demo) QR reference: <code>${qrToken}</code>
+          QR reference: <code>${qrToken}</code>
         </p>
       `;
     }
 
+    function showError(message) {
+      const status = document.getElementById("punch-status");
+      status.innerHTML = `
+        <p class="punch-emoji">⚠️</p>
+        <p class="punch-text punch-text-main">${message}</p>
+      `;
+    }
+
     // ------------------------------
-    // Simulate server punch (for now only front-end)
+    // Plate (pattern) verification
+    // NOTE: This is a "same plate" check (not photo-proof). It reduces misuse
+    // by ensuring the same visual plate is presented, within a tolerance.
     // ------------------------------
-    function simulateServerPunch(user, direction, qrToken) {
-      console.log("PUNCH_EVENT", {
-        userId: user.id,
-        displayName: user.displayName,
-        direction,
-        qrToken,
-        timestamp: new Date().toISOString()
+    function templateKeyForQr(qr) {
+      return `${PLATE_TEMPLATE_PREFIX}${qr}`;
+    }
+
+    function loadPlateTemplate(qr) {
+      try {
+        return window.localStorage.getItem(templateKeyForQr(qr));
+      } catch {
+        return null;
+      }
+    }
+
+    function savePlateTemplate(qr, hashHex) {
+      try {
+        window.localStorage.setItem(templateKeyForQr(qr), hashHex);
+      } catch {}
+    }
+
+    function resetPlateTemplate(qr) {
+      try {
+        window.localStorage.removeItem(templateKeyForQr(qr));
+      } catch {}
+    }
+
+    function hexToBigInt(hex) {
+      try {
+        return BigInt('0x' + hex);
+      } catch {
+        return 0n;
+      }
+    }
+
+    function hammingDistance64(aHex, bHex) {
+      const a = hexToBigInt(aHex);
+      const b = hexToBigInt(bHex);
+      let x = a ^ b;
+      let count = 0;
+      while (x) {
+        x &= (x - 1n);
+        count++;
+      }
+      return count;
+    }
+
+    // pHash (64-bit) from a video frame
+    // - draw to 32x32 grayscale
+    // - compute DCT
+    // - take top-left 8x8 (excluding [0][0])
+    function computePHash64FromVideo(videoEl) {
+      const size = 32;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      ctx.drawImage(videoEl, 0, 0, size, size);
+      const img = ctx.getImageData(0, 0, size, size).data;
+
+      // grayscale matrix
+      const pixels = Array.from({ length: size }, () => new Array(size).fill(0));
+      let idx = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const r = img[idx];
+          const g = img[idx + 1];
+          const b = img[idx + 2];
+          idx += 4;
+          pixels[y][x] = 0.299 * r + 0.587 * g + 0.114 * b;
+        }
+      }
+
+      // 2D DCT
+      const dct = Array.from({ length: size }, () => new Array(size).fill(0));
+      const c = (u) => (u === 0 ? 1 / Math.sqrt(2) : 1);
+
+      for (let u = 0; u < size; u++) {
+        for (let v = 0; v < size; v++) {
+          let sum = 0;
+          for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+              sum +=
+                pixels[y][x] *
+                Math.cos(((2 * x + 1) * v * Math.PI) / (2 * size)) *
+                Math.cos(((2 * y + 1) * u * Math.PI) / (2 * size));
+            }
+          }
+          dct[u][v] = (2 / size) * c(u) * c(v) * sum;
+        }
+      }
+
+      // collect 8x8 low frequencies
+      const vals = [];
+      for (let u = 0; u < 8; u++) {
+        for (let v = 0; v < 8; v++) {
+          if (u === 0 && v === 0) continue;
+          vals.push(dct[u][v]);
+        }
+      }
+
+      // median
+      const sorted = [...vals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] || 0;
+
+      // build 64-bit hash
+      let hash = 0n;
+      let bit = 0;
+      for (let u = 0; u < 8; u++) {
+        for (let v = 0; v < 8; v++) {
+          const val = dct[u][v];
+          const isOne = val > median;
+          if (isOne) {
+            hash |= (1n << BigInt(63 - bit));
+          }
+          bit++;
+        }
+      }
+
+      // return hex padded to 16 chars
+      let hex = hash.toString(16);
+      hex = hex.padStart(16, '0');
+      return hex;
+    }
+
+    async function openCamera(videoEl) {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      videoEl.srcObject = stream;
+      await new Promise((resolve) => {
+        videoEl.onloadedmetadata = () => resolve();
+      });
+      return stream;
+    }
+
+    function stopCamera(stream) {
+      if (!stream) return;
+      for (const t of stream.getTracks()) t.stop();
+    }
+
+    async function verifyPlatePattern(qr) {
+      const verifyWrap = document.getElementById('plate-verify');
+      const verifyText = document.getElementById('plate-verify-text');
+      const videoEl = document.getElementById('plate-video');
+      const captureBtn = document.getElementById('plate-capture');
+      const resetBtn = document.getElementById('plate-reset');
+
+      verifyWrap.hidden = false;
+      videoEl.hidden = false;
+
+      let stream = null;
+      try {
+        stream = await openCamera(videoEl);
+      } catch (e) {
+        verifyText.textContent = 'Camera access is required to verify the plate pattern.';
+        captureBtn.hidden = true;
+        resetBtn.hidden = true;
+        return { ok: false, reason: 'camera_denied' };
+      }
+
+      const existingTemplate = loadPlateTemplate(qr);
+      resetBtn.hidden = false;
+      resetBtn.onclick = () => {
+        resetPlateTemplate(qr);
+        window.location.reload();
+      };
+
+      if (!existingTemplate) {
+        verifyText.textContent = 'First time on this phone: hold the plate in view and press Capture.';
+        captureBtn.hidden = false;
+
+        const hash = await new Promise((resolve) => {
+          captureBtn.onclick = () => {
+            try {
+              const h = computePHash64FromVideo(videoEl);
+              resolve(h);
+            } catch (e) {
+              resolve(null);
+            }
+          };
+        });
+
+        stopCamera(stream);
+        if (!hash) return { ok: false, reason: 'capture_failed' };
+
+        savePlateTemplate(qr, hash);
+        return { ok: true, distance: 0, templated: true };
+      }
+
+      // Existing template: auto-capture a few frames and take best distance
+      verifyText.textContent = 'Verifying plate… keep the plate steady for a moment.';
+      captureBtn.hidden = true;
+
+      let best = { dist: 999, hash: null };
+      for (let i = 0; i < 3; i++) {
+        await new Promise(r => setTimeout(r, 350));
+        try {
+          const h = computePHash64FromVideo(videoEl);
+          const d = hammingDistance64(existingTemplate, h);
+          if (d < best.dist) best = { dist: d, hash: h };
+        } catch {}
+      }
+
+      stopCamera(stream);
+
+      const ok = best.dist <= PLATE_THRESHOLD;
+      return { ok, distance: best.dist, threshold: PLATE_THRESHOLD };
+    }
+
+    // ------------------------------
+    // Real punch to backend
+    // ------------------------------
+    async function sendPunchToServer(user, direction, qrToken) {
+      const deviceId = getOrCreateDeviceId();
+
+      const resp = await fetch('/api/punch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qr: qrToken,
+          direction,
+          employeeToken: user.id,
+          deviceId,
+          patternOk: true
+        })
       });
 
-      showPunchResult(user, direction, qrToken);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.ok) {
+        const msg = data && data.error ? data.error : 'Punch failed.';
+        throw new Error(msg);
+      }
+      return data;
     }
 
     // ------------------------------
@@ -234,9 +495,21 @@
       const storedUser = getStoredDeviceUser();
 
       if (storedUser) {
-        // Device already linked → direct punch
-        simulateServerPunch(storedUser, direction, qr);
+        // Device already linked → verify plate pattern, then punch
         form.hidden = true;
+        (async () => {
+          const verify = await verifyPlatePattern(qr);
+          if (!verify.ok) {
+            showError(`Plate mismatch. Please scan the correct plate. (score: ${verify.distance ?? 'n/a'})`);
+            return;
+          }
+          try {
+            await sendPunchToServer(storedUser, direction, qr);
+            showPunchResult(storedUser, direction, qr);
+          } catch (e) {
+            showError(e.message || 'Punch failed.');
+          }
+        })();
       } else {
         // First time on this device
         showFirstTimeForm();
@@ -255,8 +528,20 @@
         };
 
         storeDeviceUser(newUser);
-        simulateServerPunch(newUser, direction, qr);
         form.hidden = true;
+        (async () => {
+          const verify = await verifyPlatePattern(qr);
+          if (!verify.ok) {
+            showError(`Plate mismatch. Please scan the correct plate. (score: ${verify.distance ?? 'n/a'})`);
+            return;
+          }
+          try {
+            await sendPunchToServer(newUser, direction, qr);
+            showPunchResult(newUser, direction, qr);
+          } catch (e) {
+            showError(e.message || 'Punch failed.');
+          }
+        })();
       });
     })();
   </script>

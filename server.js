@@ -18,6 +18,8 @@ app.use((req, res, next) => {
   if (!req.path.endsWith('.html')) return next();
 
   if (req.path.startsWith('/views/')) return next();
+  // Allow punch page to be served as a static html file (QR opens this)
+  if (req.path === '/punch.html') return next();
   if (req.path === '/login.html') return res.redirect(301, '/login');
   if (req.path === '/signup.html') return res.redirect(301, '/signup');
   if (req.path === '/index.html') return res.redirect(301, '/app');
@@ -37,6 +39,178 @@ app.get('/', (_, res) => res.redirect('/login'));
 app.get('/signup', (_, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
 app.get('/login', (_, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
 app.get('/app', (_, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
+
+// Punch page (opened via QR on the plate)
+app.get('/punch', (_, res) => res.sendFile(path.join(rootDir, 'public', 'punch.html')));
+
+// =========================================================
+// Public API: Punch
+// =========================================================
+
+async function ensurePunchTables() {
+  // Minimal tables to support punches from the QR flow.
+  // If your DB already has these tables/columns, these statements are no-ops.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS punches (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      employee_id INTEGER NOT NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+      punched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      device_id TEXT,
+      qr_reference TEXT,
+      meta JSONB
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_punches_company_employee_time ON punches(company_id, employee_id, punched_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_punches_punched_at ON punches(punched_at DESC)`);
+
+  // Optional mapping table (useful if you don't already store the QR on the company)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS qr_registry (
+      qr_reference TEXT PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function resolveCompanyIdByQr(qrRef) {
+  const qr = safeText(qrRef);
+  if (!qr) return null;
+
+  // Strategy: try a few likely places (because schema differs per deployment).
+  // We swallow "missing table/column" errors and move on.
+  const attempts = [
+    // 1) Explicit mapping table (recommended)
+    { text: 'SELECT company_id AS id FROM qr_registry WHERE qr_reference = $1 LIMIT 1', values: [qr] },
+    // 2) Some deployments store a qr token on the company
+    { text: 'SELECT id FROM companies WHERE qr_reference = $1 LIMIT 1', values: [qr] },
+    { text: 'SELECT id FROM companies WHERE qr_token = $1 LIMIT 1', values: [qr] },
+    { text: 'SELECT id FROM companies WHERE company_code = $1 LIMIT 1', values: [qr] },
+    { text: 'SELECT id FROM companies WHERE subscription_code = $1 LIMIT 1', values: [qr] },
+    { text: 'SELECT id FROM companies WHERE customer_number = $1 LIMIT 1', values: [qr] },
+    // 3) Plate table
+    { text: 'SELECT company_id AS id FROM plates WHERE qr_reference = $1 OR plate_code = $1 LIMIT 1', values: [qr] },
+  ];
+
+  for (const a of attempts) {
+    try {
+      const r = await pool.query(a.text, a.values);
+      if (r.rows && r.rows.length) {
+        const id = r.rows[0].id;
+        if (Number.isFinite(Number(id))) return Number(id);
+      }
+    } catch (e) {
+      // Ignore missing table/column and continue
+      // 42P01 = undefined_table, 42703 = undefined_column
+      if (e && (e.code === '42P01' || e.code === '42703')) continue;
+      console.warn('resolveCompanyIdByQr query failed:', a.text, e.message);
+      continue;
+    }
+  }
+  return null;
+}
+
+async function resolveEmployeeId(companyId, employeeToken) {
+  const tok = safeText(employeeToken);
+  if (!tok) return null;
+
+  // Try numeric ID first
+  const asInt = Number(tok);
+  if (Number.isFinite(asInt) && String(asInt) === tok) {
+    try {
+      const r = await pool.query(
+        'SELECT id FROM employees WHERE id = $1 AND company_id = $2 LIMIT 1',
+        [asInt, companyId]
+      );
+      if (r.rows.length) return r.rows[0].id;
+    } catch (e) {
+      if (!(e && (e.code === '42P01' || e.code === '42703'))) {
+        console.warn('resolveEmployeeId numeric failed:', e.message);
+      }
+    }
+  }
+
+  // Then employee_code (your dashboard uses this)
+  try {
+    const r = await pool.query(
+      'SELECT id FROM employees WHERE company_id = $1 AND employee_code = $2 LIMIT 1',
+      [companyId, tok]
+    );
+    if (r.rows.length) return r.rows[0].id;
+  } catch (e) {
+    if (!(e && (e.code === '42P01' || e.code === '42703'))) {
+      console.warn('resolveEmployeeId code failed:', e.message);
+    }
+  }
+
+  // Finally: employee_no formatted as 0001 (if you store that)
+  try {
+    const r = await pool.query(
+      'SELECT id FROM employees WHERE company_id = $1 AND employee_no = $2 LIMIT 1',
+      [companyId, tok]
+    );
+    if (r.rows.length) return r.rows[0].id;
+  } catch (e) {
+    if (!(e && (e.code === '42P01' || e.code === '42703'))) {
+      console.warn('resolveEmployeeId no failed:', e.message);
+    }
+  }
+
+  return null;
+}
+
+app.post('/api/punch', async (req, res) => {
+  try {
+    await ensurePunchTables();
+
+    const qr = safeText(req.body?.qr);
+    const direction = (safeText(req.body?.direction) || 'in').toLowerCase() === 'out' ? 'out' : 'in';
+    const employeeToken = safeText(req.body?.employeeToken || req.body?.employeeId || req.body?.employee_code);
+    const deviceId = safeText(req.body?.deviceId);
+    const patternOk = req.body?.patternOk === true; // client side check
+
+    if (!qr) return res.status(400).json({ ok: false, error: 'Missing qr' });
+    if (!employeeToken) return res.status(400).json({ ok: false, error: 'Missing employee' });
+    if (!patternOk) return res.status(400).json({ ok: false, error: 'Plate verification failed' });
+
+    const companyId = await resolveCompanyIdByQr(qr);
+    if (!companyId) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Unknown QR reference. Map this QR to a company first.'
+      });
+    }
+
+    const employeeId = await resolveEmployeeId(companyId, employeeToken);
+    if (!employeeId) {
+      return res.status(404).json({ ok: false, error: 'Unknown employee for this company' });
+    }
+
+    const meta = {
+      ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+      userAgent: req.headers['user-agent'] || null
+    };
+
+    const ins = await pool.query(
+      `INSERT INTO punches (company_id, employee_id, direction, device_id, qr_reference, meta)
+       VALUES ($1, $2, $3, NULLIF($4,''), $5, $6)
+       RETURNING id, punched_at`,
+      [companyId, employeeId, direction, deviceId, qr, meta]
+    );
+
+    return res.json({
+      ok: true,
+      punchId: ins.rows[0].id,
+      punchedAt: ins.rows[0].punched_at,
+      direction
+    });
+  } catch (err) {
+    console.error('POST /api/punch error:', err);
+    return res.status(500).json({ ok: false, error: 'Server error.' });
+  }
+});
 
 // =========================================================
 // In-memory (alleen voor signup drafts + sessions)
@@ -198,722 +372,367 @@ async function allocateNextEmployeeNo(client, companyId) {
   // Lock row
   const counterRes = await client.query(
     `SELECT last_employee_no
-     FROM company_employee_counters
-     WHERE company_id = $1
-     FOR UPDATE`,
+       FROM company_employee_counters
+      WHERE company_id = $1
+      FOR UPDATE`,
     [companyId]
   );
 
-  const last = counterRes.rows[0] ? Number(counterRes.rows[0].last_employee_no) : 0;
-  const nextNo = last + 1;
-
-  if (nextNo > 9999) {
-    throw new Error('EMPLOYEE_LIMIT_REACHED');
-  }
+  const last = counterRes.rows[0]?.last_employee_no ?? 0;
+  const next = last + 1;
+  if (next > 9999) throw new Error('Employee limit reached for company');
 
   await client.query(
     `UPDATE company_employee_counters
-     SET last_employee_no = $2
-     WHERE company_id = $1`,
-    [companyId, nextNo]
+        SET last_employee_no = $2
+      WHERE company_id = $1`,
+    [companyId, next]
   );
 
-  return nextNo;
-}
-
-async function createEmployeeAutoIdentifiers(client, companyId) {
-  // Transaction expected by caller
-  const employeeNo = await allocateNextEmployeeNo(client, companyId);
-
-  // Generate code and ensure uniqueness (per company)
-  for (let i = 0; i < 10; i++) {
-    const code = genEmployeeCode(10);
-
-    // Check uniqueness (fast path)
-    const exists = await client.query(
-      `SELECT 1
-       FROM employees
-       WHERE company_id = $1 AND employee_code = $2
-       LIMIT 1`,
-      [companyId, code]
-    );
-    if (exists.rows.length) continue;
-
-    return { employeeNo, employeeCode: code };
-  }
-
-  throw new Error('EMPLOYEE_CODE_GENERATION_FAILED');
+  return next;
 }
 
 // =========================================================
-// Expected working schedule (per employee, per weekday)
-// weekday: 0=Sunday ... 6=Saturday
-// expected_minutes: 0..1440
-// break_minutes: 0..1440 (<= expected_minutes)
+// Expected Schedule table (minutes)
 // =========================================================
-async function ensureEmployeeExpectedScheduleTable() {
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS employee_expected_schedule (
-      company_id INTEGER NOT NULL,
+async function ensureExpectedScheduleTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS employee_expected_schedule (
+      id BIGSERIAL PRIMARY KEY,
       employee_id INTEGER NOT NULL,
-      weekday INTEGER NOT NULL,
+      day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
       expected_minutes INTEGER NOT NULL DEFAULT 0,
       break_minutes INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (company_id, employee_id, weekday)
-    )`
-  );
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (employee_id, day_of_week)
+    )
+  `);
 }
 
-async function seedDefaultExpectedSchedule(client, companyId, employeeId) {
-  // Default: NO schedule (all zeros).
-  // A schedule is considered "added" only when expected_minutes or break_minutes > 0 for at least one day.
-  // weekday mapping: 1..5 => Mon..Fri, 6=Sat, 0=Sun
-  const defaults = [
-    { weekday: 1, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 2, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 3, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 4, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 5, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 6, expected_minutes: 0, break_minutes: 0 },
-    { weekday: 0, expected_minutes: 0, break_minutes: 0 }
-  ];
+async function upsertExpectedSchedule(client, employeeId, scheduleRows) {
+  if (!Array.isArray(scheduleRows)) return;
 
-  for (const d of defaults) {
+  for (const row of scheduleRows) {
+    const day = intSafe(row?.day_of_week, 0);
+    const expected = intSafe(row?.expected_minutes, 0);
+    const brk = intSafe(row?.break_minutes, 0);
+
+    if (day < 1 || day > 7) continue;
+
     await client.query(
-      `INSERT INTO employee_expected_schedule (
-         company_id, employee_id, weekday, expected_minutes, break_minutes, created_at, updated_at
-       )
-       VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
-       ON CONFLICT (company_id, employee_id, weekday)
-       DO NOTHING`,
-      [companyId, employeeId, d.weekday, d.expected_minutes, d.break_minutes]
+      `INSERT INTO employee_expected_schedule (employee_id, day_of_week, expected_minutes, break_minutes, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (employee_id, day_of_week)
+       DO UPDATE SET expected_minutes = EXCLUDED.expected_minutes,
+                     break_minutes = EXCLUDED.break_minutes,
+                     updated_at = NOW()`,
+      [employeeId, day, expected, brk]
     );
   }
 }
 
 // =========================================================
-// Pricing
-// =========================================================
-const PRICING = {
-  startupFee: 49,
-  monthlyFee: 9,
-  extraPlatePrice: 39
-};
-
-// =========================================================
-// DB helpers
-// =========================================================
-async function emailExists(emailLower) {
-  const { rows } = await pool.query(
-    'SELECT 1 FROM client_portal_users WHERE email = $1 LIMIT 1',
-    [emailLower]
-  );
-  return rows.length > 0;
-}
-
-// =========================================================
-// API: Signup step 1 (Account: email + password)
+// Signup step 1: start signup draft
 // =========================================================
 app.post('/api/signup/step1', async (req, res) => {
   try {
-    const { email, password, password_confirm } = req.body || {};
+    const email = normalizeLower(req.body.email);
+    const password = String(req.body.password || '');
 
-    if (!email || !password || !password_confirm) {
-      return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    if (!isValidEmail(email)) return res.status(400).json({ ok: false, error: 'Invalid email.' });
+    if (password.length < 8) return res.status(400).json({ ok: false, error: 'Password must be at least 8 characters.' });
+
+    // Check existing user
+    const existing = await pool.query(
+      'SELECT id FROM client_portal_users WHERE email = $1 LIMIT 1',
+      [email]
+    );
+    if (existing.rows.length) {
+      return res.status(400).json({ ok: false, error: 'Email already registered.' });
     }
-
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ ok: false, error: 'Invalid e-mail address.' });
-    }
-
-    if (String(password).length < 8) {
-      return res.status(400).json({ ok: false, error: 'Password too short.' });
-    }
-
-    if (password !== password_confirm) {
-      return res.status(400).json({ ok: false, error: 'Passwords do not match.' });
-    }
-
-    const key = normalizeLower(email);
-    if (await emailExists(key)) {
-      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
-    }
-
-    const passHash = await bcrypt.hash(String(password), 10);
 
     const signupToken = uuidv4();
+    const passHash = await bcrypt.hash(password, 10);
+
     signupTokens.set(signupToken, {
-      email: key,
+      email,
       passHash,
-      status: 'pending_step2',
-      draftCompany: null
+      status: 'draft',
+      draftCompany: {}
     });
 
-    res.json({ ok: true, signupToken });
+    return res.json({ ok: true, signupToken });
   } catch (err) {
     console.error('signup step1 error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
 // =========================================================
-// API: Signup step 2 (Company details saved; no activation yet)
+// Signup step 2: company details
 // =========================================================
 app.post('/api/signup/step2', async (req, res) => {
   try {
-    const {
-      signup_token,
-      email,
-      password,
+    const signupToken = safeText(req.body.signupToken);
+    if (!signupTokens.has(signupToken)) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
+    }
 
-      company_name,
-      enterprise_number,
+    const draft = signupTokens.get(signupToken);
+    const companyName = safeText(req.body.company_name);
+    const legalForm = safeText(req.body.legal_form);
+    const vatNumber = normalizeUpper(req.body.vat_number);
+    const countryCode = normalizeUpper(req.body.country_code);
+    const website = safeText(req.body.website);
+    const industry = safeText(req.body.industry);
+    const employeesCount = intSafe(req.body.employees_count, 0);
+    const contactFirst = safeText(req.body.contact_first_name);
+    const contactLast = safeText(req.body.contact_last_name);
+    const contactEmail = normalizeLower(req.body.contact_email);
+    const contactPhone = safeText(req.body.contact_phone);
+
+    if (!companyName) return res.status(400).json({ ok: false, error: 'Company name is required.' });
+    if (!countryCode || !EU_COUNTRIES.has(countryCode)) return res.status(400).json({ ok: false, error: 'Invalid country code.' });
+    if (!isValidWebsite(website)) return res.status(400).json({ ok: false, error: 'Invalid website.' });
+    if (contactEmail && !isValidEmail(contactEmail)) return res.status(400).json({ ok: false, error: 'Invalid contact email.' });
+
+    draft.draftCompany = {
+      ...draft.draftCompany,
+      company_name: companyName,
+      legal_form: legalForm,
+      vat_number: vatNumber,
+      country_code: countryCode,
       website,
-
-      registered_contact_person,
-      delivery_contact_person,
-
-      registered_street,
-      registered_box,
-      registered_postal_code,
-      registered_city,
-      registered_country_code,
-
-      billing_email,
-      billing_reference,
-
-      delivery_is_different,
-      delivery_street,
-      delivery_box,
-      delivery_postal_code,
-      delivery_city,
-      delivery_country_code
-    } = req.body || {};
-
-    if (!signup_token || !signupTokens.has(signup_token)) {
-      return res.status(400).json({ ok: false, error: 'Signup session expired.' });
-    }
-
-    const s = signupTokens.get(signup_token);
-
-    const emailKey = normalizeLower(email || '');
-    if (s.email !== emailKey) {
-      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-    }
-
-    const okPass = await bcrypt.compare(String(password || ''), s.passHash);
-    if (!okPass) {
-      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-    }
-
-    if (s.status !== 'pending_step2') {
-      return res.status(400).json({ ok: false, error: 'Unexpected signup state.' });
-    }
-
-    if (
-      !company_name ||
-      !enterprise_number ||
-      !registered_contact_person ||
-      !registered_street ||
-      !registered_postal_code ||
-      !registered_city ||
-      !registered_country_code ||
-      !billing_email
-    ) {
-      return res.status(400).json({ ok: false, error: 'Missing company fields.' });
-    }
-
-    const regCountry = normalizeUpper(registered_country_code);
-    if (!EU_COUNTRIES.has(regCountry)) {
-      return res.status(400).json({ ok: false, error: 'Invalid country code.' });
-    }
-
-    const billingEmailKey = normalizeLower(billing_email);
-    if (!isValidEmail(billingEmailKey)) {
-      return res.status(400).json({ ok: false, error: 'Invalid billing e-mail address.' });
-    }
-
-    const deliveryIsDifferent = !!delivery_is_different;
-
-    let delCountry = '';
-    if (deliveryIsDifferent) {
-      if (
-        !delivery_contact_person ||
-        !delivery_street ||
-        !delivery_postal_code ||
-        !delivery_city ||
-        !delivery_country_code
-      ) {
-        return res.status(400).json({ ok: false, error: 'Missing delivery address fields.' });
-      }
-      delCountry = normalizeUpper(delivery_country_code);
-      if (!EU_COUNTRIES.has(delCountry)) {
-        return res.status(400).json({ ok: false, error: 'Invalid delivery country code.' });
-      }
-    }
-
-    if (!isValidWebsite(website)) {
-      return res.status(400).json({ ok: false, error: 'Invalid website URL.' });
-    }
-
-    const websiteClean = safeText(website);
-    const websiteNormalized = websiteClean
-      ? normalizeLower(websiteClean.startsWith('http') ? websiteClean : `https://${websiteClean}`)
-      : '';
-
-    // ✅ Alles wat in dashboard/DB komt => HOOFDLETTERS (behalve email/website)
-    s.draftCompany = {
-      name: normalizeUpper(company_name),
-      enterpriseNumber: normalizeUpper(enterprise_number),
-      website: websiteNormalized || null,
-
-      registeredContactPerson: normalizeUpper(registered_contact_person),
-      deliveryContactPerson: deliveryIsDifferent ? normalizeUpper(delivery_contact_person) : null,
-
-      registered: {
-        street: normalizeUpper(registered_street),
-        box: normalizeUpper(registered_box),
-        postalCode: normalizeUpper(registered_postal_code),
-        city: normalizeUpper(registered_city),
-        countryCode: regCountry
-      },
-
-      billing: {
-        email: billingEmailKey, // lowercase
-        reference: normalizeUpper(billing_reference)
-      },
-
-      delivery: deliveryIsDifferent ? {
-        street: normalizeUpper(delivery_street),
-        box: normalizeUpper(delivery_box),
-        postalCode: normalizeUpper(delivery_postal_code),
-        city: normalizeUpper(delivery_city),
-        countryCode: delCountry
-      } : null
+      industry,
+      employees_count: employeesCount,
+      contact_first_name: contactFirst,
+      contact_last_name: contactLast,
+      contact_email: contactEmail,
+      contact_phone: contactPhone
     };
 
-    s.status = 'pending_step3';
-
-    res.json({ ok: true });
+    signupTokens.set(signupToken, draft);
+    return res.json({ ok: true });
   } catch (err) {
     console.error('signup step2 error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
 // =========================================================
-// API: Signup step 3 (Confirm order; create company + user in DB)
+// Signup step 3: addresses + create records
 // =========================================================
 app.post('/api/signup/step3', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { signup_token, email, password, extra_plates, sales_terms } = req.body || {};
-
-    if (!signup_token || !signupTokens.has(signup_token)) {
-      return res.status(400).json({ ok: false, error: 'Signup session expired.' });
+    const signupToken = safeText(req.body.signupToken);
+    if (!signupTokens.has(signupToken)) {
+      return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
     }
 
-    const s = signupTokens.get(signup_token);
+    const draft = signupTokens.get(signupToken);
+    const dc = draft.draftCompany || {};
 
-    const emailKey = normalizeLower(email || '');
-    if (s.email !== emailKey) {
-      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-    }
+    const regStreet = safeText(req.body.registered_street);
+    const regBox = safeText(req.body.registered_box);
+    const regPostal = safeText(req.body.registered_postal_code);
+    const regCity = safeText(req.body.registered_city);
+    const regCountry = normalizeUpper(req.body.registered_country_code) || dc.country_code;
 
-    const okPass = await bcrypt.compare(String(password || ''), s.passHash);
-    if (!okPass) {
-      return res.status(400).json({ ok: false, error: 'Invalid signup data.' });
-    }
+    const delStreet = safeText(req.body.delivery_street);
+    const delBox = safeText(req.body.delivery_box);
+    const delPostal = safeText(req.body.delivery_postal_code);
+    const delCity = safeText(req.body.delivery_city);
+    const delCountry = normalizeUpper(req.body.delivery_country_code) || dc.country_code;
 
-    if (s.status !== 'pending_step3' || !s.draftCompany) {
-      return res.status(400).json({ ok: false, error: 'Missing company details.' });
-    }
+    const sameAsRegistered = req.body.same_as_registered === true;
 
-    if (!sales_terms) {
-      return res.status(400).json({ ok: false, error: 'Sales terms must be accepted.' });
-    }
+    // Always a delivery address:
+    const delivery = {
+      street: firstNonEmpty(delStreet, sameAsRegistered ? regStreet : '', regStreet),
+      box: firstNonEmpty(delBox, sameAsRegistered ? regBox : '', regBox),
+      postal_code: firstNonEmpty(delPostal, sameAsRegistered ? regPostal : '', regPostal),
+      city: firstNonEmpty(delCity, sameAsRegistered ? regCity : '', regCity),
+      country_code: firstNonEmpty(delCountry, regCountry, dc.country_code)
+    };
 
-    const qty = clamp(intSafe(extra_plates, 0), 0, 99);
+    const registered = {
+      street: regStreet,
+      box: regBox,
+      postal_code: regPostal,
+      city: regCity,
+      country_code: regCountry
+    };
 
-    // race-safe check
-    if (await emailExists(emailKey)) {
-      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
-    }
+    const customerNumber = `PUN-${formatYYYYMMDD(new Date())}${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 
     await client.query('BEGIN');
 
-    const c = s.draftCompany;
+    const companyCode = makeCompanyCode(dc.company_name);
 
-    // Registered (structured + legacy text)
-    const regLine = buildAddressLineFromFields(
-      c.registered.street,
-      c.registered.box,
-      c.registered.postalCode,
-      c.registered.city,
-      c.registered.countryCode
-    );
-
-    // Delivery (structured; if not different => mirror registered)
-    const del = c.delivery ? c.delivery : c.registered;
-
-    const bill = c.registered;
-
-    const billLine = buildAddressLineFromFields(
-      bill.street,
-      bill.box,
-      bill.postalCode,
-      bill.city,
-      bill.countryCode
-    );
-
-    const companyCode = makeCompanyCode(c.name);
-
-    // =========================================================
-    // ✅ CUSTOMER NUMBER (globale teller)
-    // =========================================================
-    const yyyymmdd = formatYYYYMMDD(new Date());
-
-    const counterRes = await client.query(
-      `UPDATE customer_number_counter
-       SET last_seq = last_seq + 1
-       WHERE id = 1
-       RETURNING last_seq`
-    );
-
-    if (!counterRes.rows.length) {
-      throw new Error('Customer number counter not initialized.');
-    }
-
-    const globalSeq = counterRes.rows[0].last_seq;
-    const customerNumber = `PUN-${yyyymmdd}${String(globalSeq).padStart(9, '0')}`;
-
-    const compIns = await client.query(
+    // Create company
+    const companyIns = await client.query(
       `INSERT INTO companies (
-        customer_number,
-
-        company_code,
-        name,
-        vat_number,
-
-        website,
-
-        registered_contact_person,
-        delivery_contact_person,
-
-        registered_street,
-        registered_box,
-        registered_postal_code,
-        registered_city,
-        registered_country_code,
-
-        billing_street,
-        billing_box,
-        billing_postal_code,
-        billing_city,
-        billing_country_code,
-
-        delivery_street,
-        delivery_box,
-        delivery_postal_code,
-        delivery_city,
-        delivery_country_code,
-
-        registered_address,
-        billing_address,
-
-        billing_email,
-        billing_reference,
-
-        estimated_user_count
-      ) VALUES (
-        $1,
-
-        $2,$3,$4,
-        $5,
-
-        $6,$7,
-
-        $8,$9,$10,$11,$12,
-
-        $13,$14,$15,$16,$17,
-
-        $18,$19,$20,$21,$22,
-
-        $23,$24,
-
-        $25,$26,
-
-        $27
-      )
-      RETURNING id`,
+         company_name,
+         legal_form,
+         vat_number,
+         country_code,
+         website,
+         industry,
+         employees_count,
+         contact_first_name,
+         contact_last_name,
+         contact_email,
+         contact_phone,
+         registered_address,
+         delivery_address,
+         customer_number,
+         company_code,
+         created_at,
+         updated_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+       RETURNING id`,
       [
+        dc.company_name,
+        dc.legal_form,
+        dc.vat_number,
+        dc.country_code,
+        dc.website,
+        dc.industry,
+        dc.employees_count,
+        dc.contact_first_name,
+        dc.contact_last_name,
+        dc.contact_email,
+        dc.contact_phone,
+        buildAddressLineFromFields(registered.street, registered.box, registered.postal_code, registered.city, registered.country_code),
+        buildAddressLineFromFields(delivery.street, delivery.box, delivery.postal_code, delivery.city, delivery.country_code),
         customerNumber,
-
-        companyCode,
-        c.name,
-        c.enterpriseNumber || null,
-
-        c.website || null,
-
-        c.registeredContactPerson || null,
-        (c.delivery ? c.deliveryContactPerson : c.registeredContactPerson) || null,
-
-        c.registered.street || null,
-        c.registered.box || null,
-        c.registered.postalCode || null,
-        c.registered.city || null,
-        c.registered.countryCode || null,
-
-        bill.street || null,
-        bill.box || null,
-        bill.postalCode || null,
-        bill.city || null,
-        bill.countryCode || null,
-
-        // ✅ delivery ALTIJD ingevuld: ofwel delivery uit form, ofwel mirror registered
-        del.street || null,
-        del.box || null,
-        del.postalCode || null,
-        del.city || null,
-        del.countryCode || null,
-
-        regLine || null,
-        billLine || null,
-
-        c.billing?.email || null,
-        c.billing?.reference || null,
-
-        1
+        companyCode
       ]
     );
 
-    const companyId = compIns.rows[0].id;
+    const companyId = companyIns.rows[0].id;
 
-    const userIns = await client.query(
-      `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id)
-       VALUES ($1,$2,'customer_admin', true, $3)
-       RETURNING id`,
-      [emailKey, s.passHash, companyId]
+    // Create admin portal user
+    const userId = uuidv4();
+    await client.query(
+      `INSERT INTO client_portal_users (id, email, password_hash, role, is_active, company_id, created_at, updated_at)
+       VALUES ($1,$2,$3,'admin',true,$4,NOW(),NOW())`,
+      [userId, draft.email, draft.passHash, companyId]
     );
-
-    const userId = userIns.rows[0].id;
 
     await client.query('COMMIT');
 
-    signupTokens.delete(signup_token);
-
-    res.json({
-      ok: true,
-      redirectUrl: '/login',
-      order: {
-        startupFeeExclVat: PRICING.startupFee,
-        extraPlatesQty: qty,
-        extraPlatePriceExclVat: PRICING.extraPlatePrice,
-        totalTodayExclVat: PRICING.startupFee + (qty * PRICING.extraPlatePrice),
-        monthlyExclVat: PRICING.monthlyFee,
-        salesTermsAccepted: true
-      },
-      created: { userId, companyId }
-    });
+    signupTokens.delete(signupToken);
+    return res.json({ ok: true });
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch {}
-
+    await client.query('ROLLBACK');
     console.error('signup step3 error:', err);
-
-    if (String(err?.code) === '23505') {
-      return res.status(400).json({ ok: false, error: 'E-mail already registered.' });
-    }
-
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   } finally {
     client.release();
   }
 });
 
 // =========================================================
-// API: Login (DB)
+// Login
 // =========================================================
 app.post('/api/login', async (req, res) => {
   try {
-    const { email, password } = req.body || {};
-    const emailKey = normalizeLower(email || '');
+    const email = normalizeLower(req.body.email);
+    const password = String(req.body.password || '');
+
+    if (!isValidEmail(email) || !password) {
+      return res.status(400).json({ ok: false, error: 'Invalid credentials.' });
+    }
 
     const { rows } = await pool.query(
-      'SELECT id, email, password_hash, is_active FROM client_portal_users WHERE email = $1 LIMIT 1',
-      [emailKey]
+      'SELECT id, email, password_hash, role, is_active FROM client_portal_users WHERE email = $1 LIMIT 1',
+      [email]
     );
 
     if (!rows.length || rows[0].is_active !== true) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+      return res.status(400).json({ ok: false, error: 'Invalid credentials.' });
     }
 
-    const ok = await bcrypt.compare(String(password), rows[0].password_hash);
-    if (!ok) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
-    }
+    const user = rows[0];
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(400).json({ ok: false, error: 'Invalid credentials.' });
 
-    const token = uuidv4();
-    sessionsByToken.set(token, { userId: rows[0].id });
+    const sessionToken = crypto.randomBytes(24).toString('hex');
+    sessionsByToken.set(sessionToken, { userId: user.id });
 
-    res.json({ ok: true, token, redirectUrl: '/app' });
+    return res.json({
+      ok: true,
+      token: sessionToken
+    });
   } catch (err) {
     console.error('login error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
-// =========================================================
-// API: Current user
-// =========================================================
 app.get('/api/me', requireAuth, async (req, res) => {
-  res.json({
-    ok: true,
-    user: {
-      id: req.auth.user.id,
-      email: req.auth.user.email,
-      role: req.auth.user.role,
-      companyId: req.auth.user.company_id
-    }
-  });
+  return res.json({ ok: true, user: req.auth.user });
 });
 
-// =========================================================
-// API: Logout
-// =========================================================
 app.post('/api/logout', requireAuth, (req, res) => {
-  sessionsByToken.delete(req.auth.token);
-  res.json({ ok: true });
+  const token = req.auth.token;
+  sessionsByToken.delete(token);
+  return res.json({ ok: true });
 });
 
 // =========================================================
-// API: Company (companies) from DB
+// API: Company
 // =========================================================
 app.get('/api/company', requireAuth, async (req, res) => {
   try {
     const companyId = req.auth.user.company_id;
-    if (!companyId) return res.status(404).json({ ok: false });
+    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
     const { rows } = await pool.query(
       `SELECT
-        id,
-        customer_number,
-
-        company_code,
-        name,
-        vat_number,
-
-        registered_contact_person,
-        delivery_contact_person,
-
-        website,
-
-        registered_street,
-        registered_box,
-        registered_postal_code,
-        registered_city,
-        registered_country_code,
-
-        delivery_street,
-        delivery_box,
-        delivery_postal_code,
-        delivery_city,
-        delivery_country_code,
-
-        billing_email,
-        billing_reference,
-
-        estimated_user_count,
-        created_at,
-        updated_at
-      FROM companies
-      WHERE id = $1
-      LIMIT 1`,
+         id,
+         company_name,
+         legal_form,
+         vat_number,
+         country_code,
+         website,
+         industry,
+         employees_count,
+         contact_first_name,
+         contact_last_name,
+         contact_email,
+         contact_phone,
+         registered_address,
+         delivery_address,
+         customer_number,
+         company_code,
+         created_at,
+         updated_at
+       FROM companies
+       WHERE id = $1
+       LIMIT 1`,
       [companyId]
     );
 
-    if (!rows.length) return res.status(404).json({ ok: false });
-
-    const r = rows[0];
-
-    // Registered (upper)
-    const regStreet = normalizeUpper(r.registered_street);
-    const regBox = normalizeUpper(r.registered_box);
-    const regPostal = normalizeUpper(r.registered_postal_code);
-    const regCity = normalizeUpper(r.registered_city);
-    const regCountry = normalizeUpper(r.registered_country_code);
-
-    // Delivery raw (upper) - may be empty for older records
-    const delStreetRaw = normalizeUpper(r.delivery_street);
-    const delBoxRaw = normalizeUpper(r.delivery_box);
-    const delPostalRaw = normalizeUpper(r.delivery_postal_code);
-    const delCityRaw = normalizeUpper(r.delivery_city);
-    const delCountryRaw = normalizeUpper(r.delivery_country_code);
-
-    // ✅ Delivery ALWAYS: field-by-field fallback to registered
-    const delStreet = firstNonEmpty(delStreetRaw, regStreet);
-    const delBox = firstNonEmpty(delBoxRaw, regBox);
-    const delPostal = firstNonEmpty(delPostalRaw, regPostal);
-    const delCity = firstNonEmpty(delCityRaw, regCity);
-    const delCountry = firstNonEmpty(delCountryRaw, regCountry);
-
-    const registered_contact_person = normalizeUpper(r.registered_contact_person);
-    const delivery_contact_person = normalizeUpper(r.delivery_contact_person);
-
-    const contactName = safeText(registered_contact_person);
-    const parts = contactName.split(/\s+/).filter(Boolean);
-    const firstName = parts.shift() || '';
-    const lastName = parts.join(' ') || '';
-
-    const company = {
-      customerNumber: safeText(r.customer_number) || '–',
-
-      name: normalizeUpper(r.name),
-      vatNumber: normalizeUpper(r.vat_number),
-
-      contact: { firstName, lastName, role: '', email: '' },
-
-      invoiceEmail: safeText(r.billing_email) ? normalizeLower(r.billing_email) : '',
-      billingReference: normalizeUpper(r.billing_reference) || '–',
-
-      // registered (for display)
-      street: regStreet,
-      postalCode: regPostal,
-      city: regCity,
-      country: regCountry,
-
-      // ✅ delivery ALWAYS present
-      delivery: {
-        street: delStreet,
-        box: delBox,
-        postalCode: delPostal,
-        city: delCity,
-        country: delCountry
-      },
-
-      // ✅ delivery contact ALWAYS: fallback to registered contact
-      registeredContactPerson: registered_contact_person || '',
-      deliveryContactPerson: safeText(delivery_contact_person) ? delivery_contact_person : (registered_contact_person || ''),
-
-      subscriptionNumber: '–',
-      subscriptionStartDate: '–'
-    };
-
-    res.json({ ok: true, company });
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Company not found.' });
+    return res.json({ ok: true, company: rows[0] });
   } catch (err) {
     console.error('company error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
 // =========================================================
-// API: Employees - LIST (includes has_punches for UI rules)
+// API: Employees
 // =========================================================
 app.get('/api/employees', requireAuth, async (req, res) => {
   try {
     const companyId = req.auth.user.company_id;
-    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    if (!companyId) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
 
     const { rows } = await pool.query(
       `SELECT
@@ -932,67 +751,72 @@ app.get('/api/employees', requireAuth, async (req, res) => {
          e.updated_at,
          EXISTS (
            SELECT 1
-           FROM punches p
-           WHERE p.employee_id = e.id
-             AND p.company_id = e.company_id
-           LIMIT 1
-         ) AS has_punches,
-         EXISTS (
-           SELECT 1
-           FROM employee_expected_schedule es
-           WHERE es.company_id = e.company_id
-             AND es.employee_id = e.id
-             AND (es.expected_minutes > 0 OR es.break_minutes > 0)
-           LIMIT 1
-         ) AS has_working_schedule
+             FROM punches p
+            WHERE p.employee_id = e.id
+              AND p.company_id = e.company_id
+            LIMIT 1
+         ) AS has_punches
        FROM employees e
-       WHERE e.company_id = $1
-       ORDER BY e.last_name ASC, e.first_name ASC, e.id ASC`,
+      WHERE e.company_id = $1
+      ORDER BY e.employee_no ASC, e.created_at ASC`,
       [companyId]
     );
 
-    // add formatted display field (does not change DB)
-    const employees = rows.map(r => ({
-      ...r,
-      employee_no_display: formatEmployeeNo(r.employee_no)
-    }));
-
-    res.json({ ok: true, employees });
+    return res.json({
+      ok: true,
+      employees: rows.map(r => ({
+        ...r,
+        employee_no_display: formatEmployeeNo(r.employee_no)
+      }))
+    });
   } catch (err) {
     console.error('employees list error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
-// =========================================================
-// API: Employees - CREATE
-// ✅ employee_no + employee_code are AUTO
-// ✅ start_date is AUTO (today) - no longer required from UI
-// =========================================================
 app.post('/api/employees', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const companyId = req.auth.user.company_id;
-    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
-    const first_name = normalizeUpper(req.body?.first_name || '');
-    const last_name = normalizeUpper(req.body?.last_name || '');
-
-    if (!first_name || !last_name) {
-      return res.status(400).json({ ok: false, error: 'Missing required fields.' });
+    if (!companyId) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
 
-    // Always default to active on create (UI does not need to send status)
-    const status = 'active';
+    const firstName = safeText(req.body.first_name);
+    const lastName = safeText(req.body.last_name);
+    const email = normalizeLower(req.body.email);
+    const phone = safeText(req.body.phone);
+    const startDate = safeText(req.body.start_date);
+    const endDate = safeText(req.body.end_date);
+    const status = safeText(req.body.status) || 'active';
 
-    // start_date fallback: today (UI does not send start_date)
-    const startDateValue = new Date().toISOString().slice(0, 10);
+    if (!firstName || !lastName || !startDate) {
+      return res.status(400).json({ ok: false, error: 'Please fill in FIRST NAME, LAST NAME and START DATE.' });
+    }
+    if (email && !isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Invalid email.' });
+    }
+
+    await ensureEmployeeCounterTable();
+    await ensureExpectedScheduleTable();
 
     await client.query('BEGIN');
 
-    const { employeeNo, employeeCode } = await createEmployeeAutoIdentifiers(client, companyId);
+    const employeeNo = await allocateNextEmployeeNo(client, companyId);
+    let employeeCode = genEmployeeCode(10);
 
-    const { rows } = await client.query(
+    // Ensure uniqueness
+    for (let i = 0; i < 5; i++) {
+      const chk = await client.query(
+        `SELECT 1 FROM employees WHERE company_id = $1 AND employee_code = $2 LIMIT 1`,
+        [companyId, employeeCode]
+      );
+      if (!chk.rows.length) break;
+      employeeCode = genEmployeeCode(10);
+    }
+
+    const ins = await client.query(
       `INSERT INTO employees (
          company_id,
          employee_no,
@@ -1006,10 +830,7 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          status,
          created_at,
          updated_at
-       )
-       VALUES (
-         $1,$2,$3,$4,$5,NULL,NULL,$6,NULL,$7,NOW(),NOW()
-       )
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULLIF($9,''),$10,NOW(),NOW())
        RETURNING
          id,
          company_id,
@@ -1024,17 +845,30 @@ app.post('/api/employees', requireAuth, async (req, res) => {
          status,
          created_at,
          updated_at`,
-      [companyId, employeeNo, employeeCode, first_name, last_name, startDateValue, status]
+      [
+        companyId,
+        employeeNo,
+        employeeCode,
+        firstName,
+        lastName,
+        email || null,
+        phone || null,
+        startDate,
+        endDate || null,
+        status
+      ]
     );
 
-    const employee = rows[0];
+    const employee = ins.rows[0];
 
-    // Seed default expected schedule (Mon-Fri 8h + 30 min break)
-    await seedDefaultExpectedSchedule(client, companyId, employee.id);
+    // Optional schedule rows (minutes)
+    if (Array.isArray(req.body.expected_schedule)) {
+      await upsertExpectedSchedule(client, employee.id, req.body.expected_schedule);
+    }
 
     await client.query('COMMIT');
 
-    res.status(201).json({
+    return res.json({
       ok: true,
       employee: {
         ...employee,
@@ -1042,207 +876,95 @@ app.post('/api/employees', requireAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch {}
+    await client.query('ROLLBACK');
     console.error('employee create error:', err);
-
-    if (String(err?.message) === 'EMPLOYEE_LIMIT_REACHED') {
-      return res.status(409).json({ ok: false, error: 'Employee limit reached (9999).' });
-    }
-
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   } finally {
     client.release();
   }
 });
 
-// =========================================================
-// API: Employees - EXPECTED SCHEDULE (GET)
-// =========================================================
 app.get('/api/employees/:id/expected-schedule', requireAuth, async (req, res) => {
-  const client = await pool.connect();
   try {
     const companyId = req.auth.user.company_id;
-    const employeeId = Number(req.params.id);
+    const employeeId = intSafe(req.params.id, 0);
+    if (!companyId || !employeeId) return res.status(400).json({ ok: false, error: 'Invalid request.' });
 
-    if (!Number.isFinite(employeeId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-    }
+    await ensureExpectedScheduleTable();
 
-    if (!companyId) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-
-    // Ensure employee exists in this company
+    // Make sure employee belongs to company
     const emp = await pool.query(
-      `SELECT id
-       FROM employees
-       WHERE id = $1 AND company_id = $2
-       LIMIT 1`,
+      `SELECT id FROM employees WHERE id = $1 AND company_id = $2 LIMIT 1`,
       [employeeId, companyId]
     );
-
-    if (!emp.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Employee not found.' });
-    }
-
-    // Ensure defaults exist (safe)
-    await client.query('BEGIN');
-    await seedDefaultExpectedSchedule(client, companyId, employeeId);
-    await client.query('COMMIT');
+    if (!emp.rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
 
     const { rows } = await pool.query(
-      `SELECT
-         weekday,
-         expected_minutes,
-         break_minutes,
-         created_at,
-         updated_at
-       FROM employee_expected_schedule
-       WHERE company_id = $1
-         AND employee_id = $2
-       ORDER BY weekday ASC`,
-      [companyId, employeeId]
+      `SELECT day_of_week, expected_minutes, break_minutes
+         FROM employee_expected_schedule
+        WHERE employee_id = $1
+        ORDER BY day_of_week ASC`,
+      [employeeId]
     );
 
-    res.json({ ok: true, schedule: rows });
+    // Always return 7 rows (1..7)
+    const byDay = new Map(rows.map(r => [r.day_of_week, r]));
+    const out = [];
+    for (let d = 1; d <= 7; d++) {
+      const r = byDay.get(d) || { day_of_week: d, expected_minutes: 0, break_minutes: 0 };
+      out.push(r);
+    }
+
+    return res.json({ ok: true, schedule: out });
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch {}
     console.error('expected schedule get error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
-  } finally {
-    client.release();
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
-// =========================================================
-// API: Employees - EXPECTED SCHEDULE (PUT)
-// =========================================================
 app.put('/api/employees/:id/expected-schedule', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const companyId = req.auth.user.company_id;
-    const employeeId = Number(req.params.id);
+    const employeeId = intSafe(req.params.id, 0);
+    if (!companyId || !employeeId) return res.status(400).json({ ok: false, error: 'Invalid request.' });
 
-    if (!Number.isFinite(employeeId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-    }
+    await ensureExpectedScheduleTable();
 
-    if (!companyId) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-
-    // Ensure employee exists in this company
+    // Verify employee belongs to company
     const emp = await pool.query(
-      `SELECT id
-       FROM employees
-       WHERE id = $1 AND company_id = $2
-       LIMIT 1`,
+      `SELECT id FROM employees WHERE id = $1 AND company_id = $2 LIMIT 1`,
       [employeeId, companyId]
     );
+    if (!emp.rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
 
-    if (!emp.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Employee not found.' });
-    }
-
-    const schedule = Array.isArray(req.body?.schedule) ? req.body.schedule : null;
-    if (!schedule) {
-      return res.status(400).json({ ok: false, error: 'Missing schedule.' });
-    }
-
-    // Validate rows
-    const allowedWeekdays = new Set([0, 1, 2, 3, 4, 5, 6]);
-    for (const r of schedule) {
-      const weekday = Number(r.weekday);
-      const expected = Number(r.expected_minutes);
-      const br = Number(r.break_minutes);
-
-      if (!allowedWeekdays.has(weekday)) {
-        return res.status(400).json({ ok: false, error: 'Invalid weekday.' });
-      }
-
-      const expectedOk = Number.isFinite(expected) && expected >= 0 && expected <= 1440;
-      const breakOk = Number.isFinite(br) && br >= 0 && br <= 1440;
-
-      if (!expectedOk || !breakOk) {
-        return res.status(400).json({ ok: false, error: 'Invalid minutes value.' });
-      }
-
-      if (br > expected) {
-        return res.status(400).json({ ok: false, error: 'Break cannot exceed expected minutes.' });
-      }
-    }
-
+    const scheduleRows = Array.isArray(req.body.schedule) ? req.body.schedule : [];
     await client.query('BEGIN');
-
-    // Ensure defaults exist
-    await seedDefaultExpectedSchedule(client, companyId, employeeId);
-
-    // Upsert all provided rows
-    for (const r of schedule) {
-      const weekday = Number(r.weekday);
-      const expected = Math.round(Number(r.expected_minutes));
-      const br = Math.round(Number(r.break_minutes));
-
-      await client.query(
-        `INSERT INTO employee_expected_schedule (
-           company_id, employee_id, weekday, expected_minutes, break_minutes, created_at, updated_at
-         )
-         VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
-         ON CONFLICT (company_id, employee_id, weekday)
-         DO UPDATE SET
-           expected_minutes = EXCLUDED.expected_minutes,
-           break_minutes = EXCLUDED.break_minutes,
-           updated_at = NOW()`,
-        [companyId, employeeId, weekday, expected, br]
-      );
-    }
-
-    const { rows } = await client.query(
-      `SELECT
-         weekday,
-         expected_minutes,
-         break_minutes,
-         created_at,
-         updated_at
-       FROM employee_expected_schedule
-       WHERE company_id = $1
-         AND employee_id = $2
-       ORDER BY weekday ASC`,
-      [companyId, employeeId]
-    );
-
+    await upsertExpectedSchedule(client, employeeId, scheduleRows);
     await client.query('COMMIT');
 
-    res.json({ ok: true, schedule: rows });
+    return res.json({ ok: true });
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch {}
+    await client.query('ROLLBACK');
     console.error('expected schedule put error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   } finally {
     client.release();
   }
 });
 
-// =========================================================
-// API: Employees - STATUS (Set inactive / reactivate)
-// =========================================================
 app.patch('/api/employees/:id/status', requireAuth, async (req, res) => {
   try {
     const companyId = req.auth.user.company_id;
-    const employeeId = Number(req.params.id);
+    const employeeId = intSafe(req.params.id, 0);
+    const nextStatus = safeText(req.body.status);
 
-    if (!Number.isFinite(employeeId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
+    if (!companyId || !employeeId) {
+      return res.status(400).json({ ok: false, error: 'Invalid request.' });
     }
 
-    if (!companyId) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-
-    // IMPORTANT: DB constraint expects 'active'/'inactive' (lowercase)
-    const nextStatus = normalizeLower(req.body?.status || '');
     if (!['active', 'inactive'].includes(nextStatus)) {
-      return res.status(400).json({ ok: false, error: "Invalid status. Use 'active' or 'inactive'." });
+      return res.status(400).json({ ok: false, error: 'Invalid status.' });
     }
 
     const { rows } = await pool.query(
@@ -1291,63 +1013,40 @@ app.patch('/api/employees/:id/status', requireAuth, async (req, res) => {
 // API: Employees - DELETE (allowed only if no punches exist)
 // =========================================================
 app.delete('/api/employees/:id', requireAuth, async (req, res) => {
-  const employeeId = Number(req.params.id);
-  const companyId = req.auth?.user?.company_id;
-
-  if (!Number.isFinite(employeeId)) {
-    return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-  }
-
-  if (!companyId) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
-
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    const companyId = req.auth.user.company_id;
+    const employeeId = intSafe(req.params.id, 0);
+    if (!companyId || !employeeId) return res.status(400).json({ ok: false, error: 'Invalid request.' });
 
-    // Ensure employee exists in this company (lock the row for race-safety)
-    const emp = await client.query(
-      `SELECT id
-       FROM employees
-       WHERE id = $1 AND company_id = $2
-       FOR UPDATE`,
-      [employeeId, companyId]
-    );
-
-    if (!emp.rows.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ ok: false, error: 'Employee not found.' });
-    }
-
-    // Block deletion if at least one punch exists
-    const hasPunch = await client.query(
+    // Block delete if punches exist
+    const hasPunches = await client.query(
       `SELECT 1
-       FROM punches
-       WHERE employee_id = $1 AND company_id = $2
-       LIMIT 1`,
-      [employeeId, companyId]
+         FROM punches p
+        WHERE p.company_id = $1
+          AND p.employee_id = $2
+        LIMIT 1`,
+      [companyId, employeeId]
     );
-
-    if (hasPunch.rows.length) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        ok: false,
-        error: 'Employee cannot be deleted after the first scan. Set employee to INACTIVE and create a new employee if needed.'
-      });
+    if (hasPunches.rows.length) {
+      return res.status(400).json({ ok: false, error: 'Cannot delete employee: punches exist.' });
     }
 
-    // Safe to delete (0 punches)
-    await client.query(
+    await client.query('BEGIN');
+    await client.query('DELETE FROM employee_expected_schedule WHERE employee_id = $1', [employeeId]);
+    const del = await client.query(
       `DELETE FROM employees
-       WHERE id = $1 AND company_id = $2`,
+        WHERE id = $1
+          AND company_id = $2
+        RETURNING id`,
       [employeeId, companyId]
     );
-
     await client.query('COMMIT');
-    return res.status(204).send();
+
+    if (!del.rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
+    return res.json({ ok: true });
   } catch (err) {
-    try { await client.query('ROLLBACK'); } catch {}
+    await client.query('ROLLBACK');
     console.error('employee delete error:', err);
     return res.status(500).json({ ok: false, error: 'Server error.' });
   } finally {
@@ -1356,7 +1055,7 @@ app.delete('/api/employees/:id', requireAuth, async (req, res) => {
 });
 
 // =========================================================
-// API: Device bindings - LIST (Dashboard)
+// API: Devices (bindings)
 // =========================================================
 app.get('/api/devices', requireAuth, async (req, res) => {
   try {
@@ -1365,62 +1064,44 @@ app.get('/api/devices', requireAuth, async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT
-         db.device_id,
-         db.employee_id,
-         db.created_at,
-         db.last_seen_at,
-         e.employee_no,
-         e.employee_code,
-         e.first_name,
-         e.last_name
-       FROM device_bindings db
-       JOIN employees e
-         ON e.id = db.employee_id
-        AND e.company_id = db.company_id
-       WHERE db.company_id = $1
-       ORDER BY db.last_seen_at DESC, db.created_at DESC`,
+         device_id,
+         employee_id,
+         created_at
+       FROM device_bindings
+       WHERE company_id = $1
+       ORDER BY created_at DESC`,
       [companyId]
     );
 
-    const devices = rows.map(r => ({
-      ...r,
-      employee_no_display: formatEmployeeNo(r.employee_no)
-    }));
-
-    res.json({ ok: true, devices });
+    return res.json({ ok: true, devices: rows });
   } catch (err) {
     console.error('devices list error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
-// =========================================================
-// API: Device bindings - UNLINK (Koppeling wissen)
-// =========================================================
 app.delete('/api/devices/:deviceId', requireAuth, async (req, res) => {
   try {
     const companyId = req.auth.user.company_id;
-    if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
     const deviceId = safeText(req.params.deviceId);
-    if (!deviceId) return res.status(400).json({ ok: false, error: 'Missing device id.' });
+    if (!companyId || !deviceId) return res.status(400).json({ ok: false, error: 'Invalid request.' });
 
-    const r = await pool.query(
+    await pool.query(
       `DELETE FROM device_bindings
-       WHERE company_id = $1
-         AND device_id = $2`,
+        WHERE company_id = $1
+          AND device_id = $2`,
       [companyId, deviceId]
     );
 
-    res.json({ ok: true, deleted: r.rowCount });
+    return res.json({ ok: true });
   } catch (err) {
     console.error('device unlink error:', err);
-    res.status(500).json({ ok: false, error: 'Server error.' });
+    return res.status(500).json({ ok: false, error: 'Server error.' });
   }
 });
 
 // =========================================================
-// API: Stats (Dashboard)
+// API: Stats
 // =========================================================
 app.get('/api/stats', requireAuth, async (req, res) => {
   try {
@@ -1461,30 +1142,21 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 });
 
 // =========================================================
-// Health (DB check)
+// Health
 // =========================================================
 app.get('/api/health', async (_, res) => {
   try {
-    const r = await pool.query('SELECT 1 AS ok');
-    res.json({ ok: true, db: r.rows[0].ok === 1 });
+    await pool.query('SELECT 1');
+    return res.json({ ok: true });
   } catch (err) {
-    console.error('DB healthcheck failed:', err);
-    res.json({ ok: true, db: false });
+    console.error('health error:', err);
+    return res.status(500).json({ ok: false, error: 'DB error.' });
   }
 });
 
 // =========================================================
-// Startup
+// Start server
 // =========================================================
-(async () => {
-  try {
-    await ensureEmployeeCounterTable();
-    await ensureEmployeeExpectedScheduleTable();
-  } catch (err) {
-    console.error('Startup ensure tables error:', err);
-  } finally {
-    app.listen(PORT, () => {
-      console.log(`MyPunctoo backend listening on port ${PORT}`);
-    });
-  }
-})();
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
