@@ -588,7 +588,7 @@ app.post('/api/signup/step2', async (req, res) => {
       [signupToken, JSON.stringify(merged)]
     );
 
-    видно
+    
     return res.json({ ok: true });
   } catch (err) {
     console.error('signup step2 error:', err);
