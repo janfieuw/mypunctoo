@@ -1,4 +1,4 @@
-// js/app.js
+// public/js/app.js
 
 const SUBSCRIPTION_STATUS_KEY = "mypunctoo_subscription_status";
 const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
@@ -267,49 +267,49 @@ async function hydrateClientRecord() {
     if (!res.ok || !data.ok) throw new Error(data.error || "Could not load company");
 
     const c = data.company || {};
+
+    // Helper: write text safely
     const set = (id, value) => {
       const el = document.getElementById(id);
-      if (el) el.textContent = value || "–";
+      if (!el) return;
+      const v = value === null || value === undefined || String(value).trim() === "" ? "–" : String(value);
+      el.textContent = v;
     };
 
-    // Company
-    set("cr-company-name", c.name);
-    set("cr-customer-number", c.customerNumber);
-    set("cr-vat", c.vatNumber);
+    // Helper: multi-line address from a single string (comma separated)
+    const setAddress = (id, addressString) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const v =
+        addressString === null || addressString === undefined || String(addressString).trim() === ""
+          ? ""
+          : String(addressString);
 
-    // Registered address
-    const regAddrLines = [c.street, `${c.postalCode || ""} ${c.city || ""}`.trim(), c.country].filter(Boolean);
-    const regEl = document.getElementById("cr-registered-address");
-    if (regEl) {
-      regEl.innerHTML = regAddrLines.length ? regAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
-    }
+      el.innerHTML = v ? escapeHtml(v).replaceAll(", ", "<br>") : "–";
+    };
 
-    // Main contact
-    set("cr-contact-name", `${c.contact?.firstName || ""} ${c.contact?.lastName || ""}`.trim());
+    // ✅ These keys match what /api/company returns (your Network screenshot)
+    set("cr-company-name", c.company_name);
+    set("cr-customer-number", c.customer_number);
+    set("cr-vat", c.vat_number);
 
-    // Billing
-    set("cr-invoice-email", c.invoiceEmail || "");
-    set("cr-billing-ref", c.billingReference || "–");
+    setAddress("cr-registered-address", c.registered_address);
 
-    // Delivery (always)
-    const del = c.delivery || {};
-    const delAddrLines = [
-      del.street || c.street,
-      `${del.postalCode || c.postalCode || ""} ${del.city || c.city || ""}`.trim(),
-      del.country || c.country
-    ].filter(Boolean);
+    set("cr-contact-name", c.main_contact);
 
-    const delAddrEl = document.getElementById("cr-delivery-address");
-    if (delAddrEl) {
-      delAddrEl.innerHTML = delAddrLines.length ? delAddrLines.map((l) => `${escapeHtml(l)}<br>`).join("") : "–";
-    }
+    set("cr-invoice-email", c.invoices_sent_to);
+    set("cr-billing-ref", c.billing_reference);
 
-    set("cr-delivery-contact", c.deliveryContactPerson || c.registeredContactPerson || "–");
+    setAddress("cr-delivery-address", c.delivery_address);
+    set("cr-delivery-contact", c.delivery_contact);
 
+    // Subscription meta (optional fields; show "–" if not present)
     const metaEl = document.getElementById("client-status-meta");
     if (metaEl) {
-      metaEl.innerHTML = `Subscription no.: <strong>${escapeHtml(c.subscriptionNumber || "–")}</strong><br>
-        Start date: <strong>${escapeHtml(c.subscriptionStartDate || "–")}</strong>`;
+      const subNo = c.subscription_number || c.subscription_no || c.subscriptionNumber || "–";
+      const startDate = c.subscription_start_date || c.start_date || c.subscriptionStartDate || "–";
+      metaEl.innerHTML = `Subscription no.: <strong>${escapeHtml(subNo)}</strong><br>
+        Start date: <strong>${escapeHtml(startDate)}</strong>`;
     }
   } catch (e) {
     console.warn(e);
@@ -437,10 +437,11 @@ function renderScheduleTable(scheduleRows) {
     });
   });
 
-  tbody.innerHTML = WEEKDAYS.map((d) => {
-    const row = mapByDay.get(d.key) || { weekday: d.key, expected_minutes: 0, break_minutes: 0 };
+  tbody.innerHTML = WEEKDAYS
+    .map((d) => {
+      const row = mapByDay.get(d.key) || { weekday: d.key, expected_minutes: 0, break_minutes: 0 };
 
-    return `
+      return `
       <tr data-weekday="${d.key}">
         <td><strong>${escapeHtml(d.label)}</strong></td>
         <td>
@@ -453,7 +454,8 @@ function renderScheduleTable(scheduleRows) {
         </td>
       </tr>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 function collectScheduleFromModal() {
