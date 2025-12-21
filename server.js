@@ -406,7 +406,7 @@ async function upsertExpectedSchedule(client, employeeId, scheduleRows) {
 }
 
 // =========================================================
-// Signup drafts (DB persisted)  ✅ fixes "Invalid signup token."
+// Signup drafts (DB persisted)
 // =========================================================
 async function ensureSignupDraftsTable() {
   await pool.query(`
@@ -451,14 +451,12 @@ async function getDraftByToken(signupToken) {
   return rows[0] || null;
 }
 
-
 function getSignupTokenFromBody(req) {
   return safeText(req.body?.signup_token || req.body?.signupToken || req.body?.token);
 }
 
 // =========================================================
-// Signup step 1: start signup draft (DB persisted)
-//   - returns a token used by step2 + step3
+// Signup step 1
 // =========================================================
 app.post('/api/signup/step1', async (req, res) => {
   try {
@@ -508,8 +506,7 @@ app.post('/api/signup/step1', async (req, res) => {
 });
 
 // =========================================================
-// Signup step 2: company details (DB persisted)
-//   - stores the exact fields your signup.html sends
+// Signup step 2
 // =========================================================
 app.post('/api/signup/step2', async (req, res) => {
   try {
@@ -591,6 +588,7 @@ app.post('/api/signup/step2', async (req, res) => {
       [signupToken, JSON.stringify(merged)]
     );
 
+    видно
     return res.json({ ok: true });
   } catch (err) {
     console.error('signup step2 error:', err);
@@ -599,8 +597,7 @@ app.post('/api/signup/step2', async (req, res) => {
 });
 
 // =========================================================
-// Signup step 3: create company + admin user (DB persisted)
-//   - uses draft data saved in step2
+// Signup step 3
 // =========================================================
 app.post('/api/signup/step3', async (req, res) => {
   const client = await pool.connect();
@@ -720,11 +717,12 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const companyId = companyIns.rows[0].id;
 
-    const userId = uuidv4();
+    // ✅ FIX: do NOT insert UUID into an integer id column.
+    // Let Postgres create the integer id automatically.
     await client.query(
-      `INSERT INTO client_portal_users (id, email, password_hash, role, is_active, company_id, created_at, updated_at)
-       VALUES ($1,$2,$3,'admin',true,$4,NOW(),NOW())`,
-      [userId, draft.email, draft.password_hash, companyId]
+      `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id, created_at, updated_at)
+       VALUES ($1,$2,'admin',true,$3,NOW(),NOW())`,
+      [draft.email, draft.password_hash, companyId]
     );
 
     // optional: store qty somewhere later (orders table). For now: ignore.
@@ -734,33 +732,32 @@ app.post('/api/signup/step3', async (req, res) => {
     await client.query('COMMIT');
 
     return res.json({ ok: true, redirectUrl: '/login' });
- } catch (err) {
-  await client.query('ROLLBACK');
+  } catch (err) {
+    await client.query('ROLLBACK');
 
-  // Log full details server-side
-  console.error('signup step3 error:', {
-    message: err?.message,
-    code: err?.code,
-    detail: err?.detail,
-    where: err?.where,
-    constraint: err?.constraint,
-    table: err?.table,
-    column: err?.column
-  });
+    // Log full details server-side
+    console.error('signup step3 error:', {
+      message: err?.message,
+      code: err?.code,
+      detail: err?.detail,
+      where: err?.where,
+      constraint: err?.constraint,
+      table: err?.table,
+      column: err?.column
+    });
 
-  // Return a useful message to the browser (TEMP for debugging)
-  return res.status(500).json({
-    ok: false,
-    error: err?.detail || err?.message || 'Server error.',
-    code: err?.code || null,
-    constraint: err?.constraint || null,
-    table: err?.table || null,
-    column: err?.column || null
-  });
-} finally {
-  client.release();
-}
-
+    // Return a useful message to the browser (TEMP for debugging)
+    return res.status(500).json({
+      ok: false,
+      error: err?.detail || err?.message || 'Server error.',
+      code: err?.code || null,
+      constraint: err?.constraint || null,
+      table: err?.table || null,
+      column: err?.column || null
+    });
+  } finally {
+    client.release();
+  }
 });
 
 // ====================================================
@@ -813,7 +810,6 @@ app.post('/api/logout', requireAuth, (req, res) => {
 
 // =========================================================
 // API: Company
-//   - Adjusted SELECT to your schema: name, company_code, vat_number, registered_address, billing_address, ...
 // =========================================================
 app.get('/api/company', requireAuth, async (req, res) => {
   try {
