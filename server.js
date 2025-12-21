@@ -406,6 +406,22 @@ async function upsertExpectedSchedule(client, employeeId, scheduleRows) {
 }
 
 // =========================================================
+// Device bindings (PREVENTS OLD 500 ERRORS)
+// =========================================================
+async function ensureDeviceBindingsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS device_bindings (
+      device_id TEXT PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      employee_id INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_device_bindings_company ON device_bindings(company_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_device_bindings_employee ON device_bindings(employee_id)`);
+}
+
+// =========================================================
 // Signup drafts (DB persisted)
 // =========================================================
 async function ensureSignupDraftsTable() {
@@ -725,7 +741,6 @@ app.post('/api/signup/step3', async (req, res) => {
     );
 
     // optional: store qty somewhere later (orders table). For now: ignore.
-
     await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signupToken]);
 
     await client.query('COMMIT');
@@ -734,7 +749,6 @@ app.post('/api/signup/step3', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    // Log full details server-side
     console.error('signup step3 error:', {
       message: err?.message,
       code: err?.code,
@@ -745,7 +759,6 @@ app.post('/api/signup/step3', async (req, res) => {
       column: err?.column
     });
 
-    // Return a useful message to the browser (TEMP for debugging)
     return res.status(500).json({
       ok: false,
       error: err?.detail || err?.message || 'Server error.',
@@ -811,12 +824,17 @@ app.post('/api/logout', requireAuth, (req, res) => {
 // API: Company
 // =========================================================
 app.get('/api/company', requireAuth, async (req, res) => {
+  // ✅ FIX: Prevent 304/ETag caching for this API endpoint
+  // This ensures the browser always receives fresh JSON after deploys/changes.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+
   try {
     const companyId = req.auth.user.company_id;
     if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
-    // We select BOTH the existing fields + delivery fields + customer_number,
-    // then we add UI-alias keys expected by client-record.html
     const { rows } = await pool.query(
       `SELECT
          id,
@@ -865,13 +883,11 @@ app.get('/api/company', requireAuth, async (req, res) => {
 
     const c = rows[0];
 
-    // Helper for computed address
     const buildAddress = (street, box, pc, city, cc) =>
       [safeText(street), safeText(box), [safeText(pc), safeText(city)].filter(Boolean).join(' ').trim(), safeText(cc)]
         .filter(Boolean)
         .join(', ');
 
-    // Prefer stored text fields if present, else build from parts
     const registeredAddress =
       safeText(c.registered_address) ||
       buildAddress(c.registered_street, c.registered_box, c.registered_postal_code, c.registered_city, c.registered_country_code) ||
@@ -885,7 +901,6 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const company = {
       ...c,
 
-      // Ensure these exist even if UI expects them
       company_name: c.name,
       main_contact: c.registered_contact_person || null,
       invoices_sent_to: c.billing_email || null,
@@ -894,7 +909,6 @@ app.get('/api/company', requireAuth, async (req, res) => {
       registered_address: registeredAddress,
       delivery_address: deliveryAddress,
 
-      // safety: normalize empty string -> null
       customer_number: c.customer_number || null,
       billing_reference: c.billing_reference || null
     };
@@ -1241,6 +1255,8 @@ app.delete('/api/employees/:id', requireAuth, async (req, res) => {
 // =========================================================
 app.get('/api/devices', requireAuth, async (req, res) => {
   try {
+    await ensureDeviceBindingsTable();
+
     const companyId = req.auth.user.company_id;
     if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
@@ -1264,6 +1280,8 @@ app.get('/api/devices', requireAuth, async (req, res) => {
 
 app.delete('/api/devices/:deviceId', requireAuth, async (req, res) => {
   try {
+    await ensureDeviceBindingsTable();
+
     const companyId = req.auth.user.company_id;
     const deviceId = safeText(req.params.deviceId);
     if (!companyId || !deviceId) return res.status(400).json({ ok: false, error: 'Invalid request.' });
