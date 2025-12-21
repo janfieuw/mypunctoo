@@ -65,7 +65,7 @@ async function ensurePunchTables() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_punches_company_employee_time ON punches(company_id, employee_id, punched_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_punches_punched_at ON punches(punched_at DESC)`);
 
-  // Optional mapping table (useful if you don't already store the QR on the company)
+  // QR mapping table (plate -> company)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS qr_registry (
       qr_reference TEXT PRIMARY KEY,
@@ -84,13 +84,12 @@ async function resolveCompanyIdByQr(qrRef) {
   const attempts = [
     // 1) Explicit mapping table (recommended)
     { text: 'SELECT company_id AS id FROM qr_registry WHERE qr_reference = $1 LIMIT 1', values: [qr] },
-    // 2) Some deployments store a qr token on the company
-    { text: 'SELECT id FROM companies WHERE qr_reference = $1 LIMIT 1', values: [qr] },
-    { text: 'SELECT id FROM companies WHERE qr_token = $1 LIMIT 1', values: [qr] },
+
+    // 2) Match against existing company identifiers (your DB has company_code, name, vat_number)
     { text: 'SELECT id FROM companies WHERE company_code = $1 LIMIT 1', values: [qr] },
-    { text: 'SELECT id FROM companies WHERE subscription_code = $1 LIMIT 1', values: [qr] },
-    { text: 'SELECT id FROM companies WHERE customer_number = $1 LIMIT 1', values: [qr] },
-    // 3) Plate table
+    { text: 'SELECT id FROM companies WHERE vat_number = $1 LIMIT 1', values: [qr] },
+
+    // 3) Optional plate table (if you add it later)
     { text: 'SELECT company_id AS id FROM plates WHERE qr_reference = $1 OR plate_code = $1 LIMIT 1', values: [qr] },
   ];
 
@@ -102,7 +101,6 @@ async function resolveCompanyIdByQr(qrRef) {
         if (Number.isFinite(Number(id))) return Number(id);
       }
     } catch (e) {
-      // Ignore missing table/column and continue
       // 42P01 = undefined_table, 42703 = undefined_column
       if (e && (e.code === '42P01' || e.code === '42703')) continue;
       console.warn('resolveCompanyIdByQr query failed:', a.text, e.message);
@@ -132,7 +130,7 @@ async function resolveEmployeeId(companyId, employeeToken) {
     }
   }
 
-  // Then employee_code (your dashboard uses this)
+  // Then employee_code
   try {
     const r = await pool.query(
       'SELECT id FROM employees WHERE company_id = $1 AND employee_code = $2 LIMIT 1',
@@ -145,7 +143,7 @@ async function resolveEmployeeId(companyId, employeeToken) {
     }
   }
 
-  // Finally: employee_no formatted as 0001 (if you store that)
+  // Finally: employee_no
   try {
     const r = await pool.query(
       'SELECT id FROM employees WHERE company_id = $1 AND employee_no = $2 LIMIT 1',
@@ -177,9 +175,10 @@ app.post('/api/punch', async (req, res) => {
 
     const companyId = await resolveCompanyIdByQr(qr);
     if (!companyId) {
+      // UX-truc server-side: toon Plate ID + contact
       return res.status(404).json({
         ok: false,
-        error: 'Unknown QR reference. Map this QR to a company first.'
+        error: `Unknown Plate ID: ${qr}. Please contact support@punctoo.be.`
       });
     }
 
@@ -213,9 +212,8 @@ app.post('/api/punch', async (req, res) => {
 });
 
 // =========================================================
-// In-memory (alleen voor signup drafts + sessions)
+// Sessions (still in-memory; OK for now)
 // =========================================================
-const signupTokens = new Map(); // signupToken -> { email, passHash, status, draftCompany }
 const sessionsByToken = new Map(); // sessionToken -> { userId }
 
 // =========================================================
@@ -291,10 +289,6 @@ function intSafe(n, fallback = 0) {
   return Number.isFinite(x) ? x : fallback;
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
 function buildAddressLineFromFields(street, box, postalCode, city, countryCode) {
   const line = [
     safeText(street),
@@ -315,25 +309,8 @@ function makeCompanyCode(companyName) {
   return `${base || 'COMP'}-${suffix}`;
 }
 
-function formatYYYYMMDD(d = new Date()) {
-  const yyyy = String(d.getFullYear());
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}${mm}${dd}`;
-}
-
-function firstNonEmpty(...vals) {
-  for (const v of vals) {
-    const t = safeText(v);
-    if (t) return t;
-  }
-  return '';
-}
-
 // =========================================================
 // Employee identifiers (AUTO)
-// - employee_no: 1..9999 per company (toon als 0001)
-// - employee_code: random A-Z0-9
 // =========================================================
 function genEmployeeCode(len = 10) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -351,7 +328,6 @@ function formatEmployeeNo(no) {
 }
 
 async function ensureEmployeeCounterTable() {
-  // Safe create
   await pool.query(
     `CREATE TABLE IF NOT EXISTS company_employee_counters (
       company_id INTEGER PRIMARY KEY,
@@ -361,7 +337,6 @@ async function ensureEmployeeCounterTable() {
 }
 
 async function allocateNextEmployeeNo(client, companyId) {
-  // Ensure counter row exists
   await client.query(
     `INSERT INTO company_employee_counters (company_id, last_employee_no)
      VALUES ($1, 0)
@@ -369,7 +344,6 @@ async function allocateNextEmployeeNo(client, companyId) {
     [companyId]
   );
 
-  // Lock row
   const counterRes = await client.query(
     `SELECT last_employee_no
        FROM company_employee_counters
@@ -432,10 +406,58 @@ async function upsertExpectedSchedule(client, employeeId, scheduleRows) {
 }
 
 // =========================================================
-// Signup step 1: start signup draft
+// Signup drafts (DB persisted)  ✅ fixes "Invalid signup token."
+// =========================================================
+async function ensureSignupDraftsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signup_drafts (
+      signup_token TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      draft_company JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_signup_drafts_expires ON signup_drafts(expires_at)`);
+}
+
+async function cleanupExpiredSignupDrafts() {
+  // Best-effort cleanup; ignore errors
+  try {
+    await ensureSignupDraftsTable();
+    await pool.query(`DELETE FROM signup_drafts WHERE expires_at < NOW()`);
+  } catch {
+    // ignore
+  }
+}
+
+function hoursFromNow(h) {
+  const d = new Date();
+  d.setHours(d.getHours() + h);
+  return d;
+}
+
+async function getDraftByToken(signupToken) {
+  await ensureSignupDraftsTable();
+  const { rows } = await pool.query(
+    `SELECT signup_token, email, password_hash, draft_company
+       FROM signup_drafts
+      WHERE signup_token = $1
+        AND expires_at >= NOW()
+      LIMIT 1`,
+    [signupToken]
+  );
+  return rows[0] || null;
+}
+
+// =========================================================
+// Signup step 1: start signup draft (DB persisted)
 // =========================================================
 app.post('/api/signup/step1', async (req, res) => {
   try {
+    await cleanupExpiredSignupDrafts();
+
     const email = normalizeLower(req.body.email);
     const password = String(req.body.password || '');
 
@@ -451,15 +473,17 @@ app.post('/api/signup/step1', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Email already registered.' });
     }
 
+    await ensureSignupDraftsTable();
+
     const signupToken = uuidv4();
     const passHash = await bcrypt.hash(password, 10);
+    const expiresAt = hoursFromNow(2); // 2 hours to finish signup
 
-    signupTokens.set(signupToken, {
-      email,
-      passHash,
-      status: 'draft',
-      draftCompany: {}
-    });
+    await pool.query(
+      `INSERT INTO signup_drafts (signup_token, email, password_hash, draft_company, expires_at)
+       VALUES ($1, $2, $3, '{}'::jsonb, $4)`,
+      [signupToken, email, passHash, expiresAt.toISOString()]
+    );
 
     return res.json({ ok: true, signupToken });
   } catch (err) {
@@ -469,23 +493,23 @@ app.post('/api/signup/step1', async (req, res) => {
 });
 
 // =========================================================
-// Signup step 2: company details
+// Signup step 2: company details (DB persisted)
 // =========================================================
 app.post('/api/signup/step2', async (req, res) => {
   try {
     const signupToken = safeText(req.body.signupToken);
-    if (!signupTokens.has(signupToken)) {
+    const draft = await getDraftByToken(signupToken);
+    if (!draft) {
       return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
     }
 
-    const draft = signupTokens.get(signupToken);
+    // Note: keep the payload fields as your frontend already sends them
     const companyName = safeText(req.body.company_name);
-    const legalForm = safeText(req.body.legal_form);
     const vatNumber = normalizeUpper(req.body.vat_number);
     const countryCode = normalizeUpper(req.body.country_code);
     const website = safeText(req.body.website);
-    const industry = safeText(req.body.industry);
     const employeesCount = intSafe(req.body.employees_count, 0);
+
     const contactFirst = safeText(req.body.contact_first_name);
     const contactLast = safeText(req.body.contact_last_name);
     const contactEmail = normalizeLower(req.body.contact_email);
@@ -496,14 +520,12 @@ app.post('/api/signup/step2', async (req, res) => {
     if (!isValidWebsite(website)) return res.status(400).json({ ok: false, error: 'Invalid website.' });
     if (contactEmail && !isValidEmail(contactEmail)) return res.status(400).json({ ok: false, error: 'Invalid contact email.' });
 
-    draft.draftCompany = {
-      ...draft.draftCompany,
+    const merged = {
+      ...(draft.draft_company || {}),
       company_name: companyName,
-      legal_form: legalForm,
       vat_number: vatNumber,
       country_code: countryCode,
       website,
-      industry,
       employees_count: employeesCount,
       contact_first_name: contactFirst,
       contact_last_name: contactLast,
@@ -511,7 +533,13 @@ app.post('/api/signup/step2', async (req, res) => {
       contact_phone: contactPhone
     };
 
-    signupTokens.set(signupToken, draft);
+    await pool.query(
+      `UPDATE signup_drafts
+          SET draft_company = $2::jsonb
+        WHERE signup_token = $1`,
+      [signupToken, JSON.stringify(merged)]
+    );
+
     return res.json({ ok: true });
   } catch (err) {
     console.error('signup step2 error:', err);
@@ -520,94 +548,124 @@ app.post('/api/signup/step2', async (req, res) => {
 });
 
 // =========================================================
-// Signup step 3: addresses + create records
+// Signup step 3: addresses + create records (DB persisted)
+//   - Uses your actual companies schema: name, company_code, vat_number, registered_*, billing_*
 // =========================================================
 app.post('/api/signup/step3', async (req, res) => {
   const client = await pool.connect();
   try {
     const signupToken = safeText(req.body.signupToken);
-    if (!signupTokens.has(signupToken)) {
+    const draft = await getDraftByToken(signupToken);
+    if (!draft) {
       return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
     }
 
-    const draft = signupTokens.get(signupToken);
-    const dc = draft.draftCompany || {};
+    const dc = draft.draft_company || {};
 
+    // Registered fields (frontend names)
+    const regContactPerson = safeText(req.body.registered_contact_person || req.body.contact_person);
     const regStreet = safeText(req.body.registered_street);
     const regBox = safeText(req.body.registered_box);
     const regPostal = safeText(req.body.registered_postal_code);
     const regCity = safeText(req.body.registered_city);
-    const regCountry = normalizeUpper(req.body.registered_country_code) || dc.country_code;
+    const regCountry = normalizeUpper(req.body.registered_country_code) || normalizeUpper(dc.country_code);
 
-    const delStreet = safeText(req.body.delivery_street);
-    const delBox = safeText(req.body.delivery_box);
-    const delPostal = safeText(req.body.delivery_postal_code);
-    const delCity = safeText(req.body.delivery_city);
-    const delCountry = normalizeUpper(req.body.delivery_country_code) || dc.country_code;
-
+    // "Delivery" fields from frontend; DB uses billing_* (as in your screenshot).
     const sameAsRegistered = req.body.same_as_registered === true;
 
-    // Always a delivery address:
-    const delivery = {
-      street: firstNonEmpty(delStreet, sameAsRegistered ? regStreet : '', regStreet),
-      box: firstNonEmpty(delBox, sameAsRegistered ? regBox : '', regBox),
-      postal_code: firstNonEmpty(delPostal, sameAsRegistered ? regPostal : '', regPostal),
-      city: firstNonEmpty(delCity, sameAsRegistered ? regCity : '', regCity),
-      country_code: firstNonEmpty(delCountry, regCountry, dc.country_code)
-    };
+    const delContactPerson = safeText(req.body.delivery_contact_person || req.body.billing_contact_person);
+    const delStreet = safeText(req.body.delivery_street || req.body.billing_street);
+    const delBox = safeText(req.body.delivery_box || req.body.billing_box);
+    const delPostal = safeText(req.body.delivery_postal_code || req.body.billing_postal_code);
+    const delCity = safeText(req.body.delivery_city || req.body.billing_city);
+    const delCountry = normalizeUpper(req.body.delivery_country_code || req.body.billing_country_code) || regCountry;
 
-    const registered = {
-      street: regStreet,
-      box: regBox,
-      postal_code: regPostal,
-      city: regCity,
-      country_code: regCountry
-    };
+    // Always a delivery/billing address: if missing, fallback to registered.
+    const billingStreet = safeText(delStreet) || (sameAsRegistered ? regStreet : '') || regStreet;
+    const billingBox = safeText(delBox) || (sameAsRegistered ? regBox : '') || regBox;
+    const billingPostal = safeText(delPostal) || (sameAsRegistered ? regPostal : '') || regPostal;
+    const billingCity = safeText(delCity) || (sameAsRegistered ? regCity : '') || regCity;
+    const billingCountry = safeText(delCountry) || regCountry;
 
-    const customerNumber = `PUN-${formatYYYYMMDD(new Date())}${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
+    const registeredAddress = buildAddressLineFromFields(regStreet, regBox, regPostal, regCity, regCountry);
+    const billingAddress = buildAddressLineFromFields(billingStreet, billingBox, billingPostal, billingCity, billingCountry);
+
+    const companyName = safeText(dc.company_name);
+    const vatNumber = safeText(dc.vat_number);
+    const website = safeText(dc.website);
+    const estimatedUserCount = intSafe(dc.employees_count, 0);
+
+    const billingEmail = safeText(dc.contact_email); // best mapping for now
+    const billingReference = safeText(req.body.billing_reference); // optional
+    const deliveryContact = safeText(delContactPerson) || safeText(`${dc.contact_first_name || ''} ${dc.contact_last_name || ''}`.trim()) || regContactPerson;
+    const registeredContact = safeText(regContactPerson) || safeText(`${dc.contact_first_name || ''} ${dc.contact_last_name || ''}`.trim());
+
+    if (!companyName) {
+      return res.status(400).json({ ok: false, error: 'Company name missing (step2).' });
+    }
+    if (!regCountry) {
+      return res.status(400).json({ ok: false, error: 'Registered country missing.' });
+    }
 
     await client.query('BEGIN');
 
-    const companyCode = makeCompanyCode(dc.company_name);
+    const companyCode = makeCompanyCode(companyName);
 
-    // Create company
+    // Create company: match your current schema (from your screenshot)
     const companyIns = await client.query(
       `INSERT INTO companies (
-         company_name,
-         legal_form,
-         vat_number,
-         country_code,
-         website,
-         industry,
-         employees_count,
-         contact_first_name,
-         contact_last_name,
-         contact_email,
-         contact_phone,
-         registered_address,
-         delivery_address,
-         customer_number,
          company_code,
+         name,
+         vat_number,
+         registered_address,
+         billing_address,
+         billing_email,
+         billing_reference,
+         estimated_user_count,
          created_at,
-         updated_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+         updated_at,
+         registered_contact_person,
+         delivery_contact_person,
+         website,
+         registered_street,
+         registered_box,
+         registered_postal_code,
+         registered_city,
+         registered_country_code,
+         billing_street,
+         billing_box,
+         billing_postal_code,
+         billing_city,
+         billing_country_code
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW(),
+         $9,$10,$11,
+         $12,$13,$14,$15,$16,
+         $17,$18,$19,$20,$21
+       )
        RETURNING id`,
       [
-        dc.company_name,
-        dc.legal_form,
-        dc.vat_number,
-        dc.country_code,
-        dc.website,
-        dc.industry,
-        dc.employees_count,
-        dc.contact_first_name,
-        dc.contact_last_name,
-        dc.contact_email,
-        dc.contact_phone,
-        buildAddressLineFromFields(registered.street, registered.box, registered.postal_code, registered.city, registered.country_code),
-        buildAddressLineFromFields(delivery.street, delivery.box, delivery.postal_code, delivery.city, delivery.country_code),
-        customerNumber,
-        companyCode
+        companyCode,
+        companyName,
+        vatNumber || null,
+        registeredAddress || null,
+        billingAddress || null,
+        billingEmail || null,
+        billingReference || null,
+        estimatedUserCount || 0,
+        registeredContact || null,
+        deliveryContact || null,
+        website || null,
+        regStreet || null,
+        regBox || null,
+        regPostal || null,
+        regCity || null,
+        regCountry || null,
+        billingStreet || null,
+        billingBox || null,
+        billingPostal || null,
+        billingCity || null,
+        billingCountry || null
       ]
     );
 
@@ -618,12 +676,14 @@ app.post('/api/signup/step3', async (req, res) => {
     await client.query(
       `INSERT INTO client_portal_users (id, email, password_hash, role, is_active, company_id, created_at, updated_at)
        VALUES ($1,$2,$3,'admin',true,$4,NOW(),NOW())`,
-      [userId, draft.email, draft.passHash, companyId]
+      [userId, draft.email, draft.password_hash, companyId]
     );
+
+    // Remove draft (completed)
+    await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signupToken]);
 
     await client.query('COMMIT');
 
-    signupTokens.delete(signupToken);
     return res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -684,6 +744,7 @@ app.post('/api/logout', requireAuth, (req, res) => {
 
 // =========================================================
 // API: Company
+//   - Adjusted SELECT to your schema: name, company_code, vat_number, registered_address, billing_address, ...
 // =========================================================
 app.get('/api/company', requireAuth, async (req, res) => {
   try {
@@ -693,21 +754,27 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
          id,
-         company_name,
-         legal_form,
-         vat_number,
-         country_code,
-         website,
-         industry,
-         employees_count,
-         contact_first_name,
-         contact_last_name,
-         contact_email,
-         contact_phone,
-         registered_address,
-         delivery_address,
-         customer_number,
          company_code,
+         name,
+         vat_number,
+         registered_address,
+         billing_address,
+         billing_email,
+         billing_reference,
+         estimated_user_count,
+         registered_contact_person,
+         delivery_contact_person,
+         website,
+         registered_street,
+         registered_box,
+         registered_postal_code,
+         registered_city,
+         registered_country_code,
+         billing_street,
+         billing_box,
+         billing_postal_code,
+         billing_city,
+         billing_country_code,
          created_at,
          updated_at
        FROM companies
