@@ -224,7 +224,7 @@
                 <option value="FR">France</option>
                 <option value="DE">Germany</option>
                 <option value="GR">Greece</option>
-                <option value="HU">Hungary</option>
+                <option value="HU">Greece</option>
                 <option value="IE">Ireland</option>
                 <option value="IT">Italy</option>
                 <option value="LV">Latvia</option>
@@ -272,7 +272,6 @@
 
               <div class="order-note">€39 / piece</div>
 
-              <!-- ✅ MOVED: extra mention INSIDE the order block -->
               <div class="order-note">
                 You can also order one or more additional Plates later via your MyPunctoo dashboard.
               </div>
@@ -576,6 +575,10 @@
     });
   });
 
+  // ✅ restore token if user refreshes
+  const storedTok = sessionStorage.getItem('signup_token');
+  if (storedTok) signupTokenEl.value = storedTok;
+
   let currentStep = 1;
 
   backBtn.onclick = () => {
@@ -613,7 +616,17 @@
           return;
         }
 
-        signupTokenEl.value = data.signupToken;
+        // ✅ accept both keys (server returns signupToken; we also support signup_token)
+        const tok = data.signupToken || data.signup_token || data.token || '';
+        if (!tok) {
+          showStatus('');
+          showError('Signup token missing from server response.');
+          return;
+        }
+
+        signupTokenEl.value = tok;
+        sessionStorage.setItem('signup_token', tok);
+
         billingEmailEl.value = (payload.email || '').trim().toLowerCase();
 
         showStatus('');
@@ -627,6 +640,11 @@
     }
 
     if (currentStep === 2) {
+      if (!signupTokenEl.value) {
+        showError('Missing signup token. Please restart signup.');
+        return;
+      }
+
       const deliveryIsDifferent = !!deliveryCheckbox.checked;
 
       const prefix = vatPrefixFor(regCountryEl.value);
@@ -700,6 +718,11 @@
     showError('');
     showStatus('');
 
+    if (!signupTokenEl.value) {
+      showError('Missing signup token. Please restart signup.');
+      return;
+    }
+
     const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
     extraPlatesEl.value = String(qty);
     updateTotal();
@@ -731,6 +754,7 @@
         return;
       }
 
+      sessionStorage.removeItem('signup_token');
       window.location.href = data.redirectUrl || '/login';
     } catch (e) {
       showStatus('');
