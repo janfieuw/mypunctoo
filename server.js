@@ -588,7 +588,6 @@ app.post('/api/signup/step2', async (req, res) => {
       [signupToken, JSON.stringify(merged)]
     );
 
-    
     return res.json({ ok: true });
   } catch (err) {
     console.error('signup step2 error:', err);
@@ -816,30 +815,44 @@ app.get('/api/company', requireAuth, async (req, res) => {
     const companyId = req.auth.user.company_id;
     if (!companyId) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
+    // We select BOTH the existing fields + delivery fields + customer_number,
+    // then we add UI-alias keys expected by client-record.html
     const { rows } = await pool.query(
       `SELECT
          id,
          company_code,
          name,
+         customer_number,
          vat_number,
+
+         registered_contact_person,
          registered_address,
+
          billing_address,
          billing_email,
          billing_reference,
-         estimated_user_count,
-         registered_contact_person,
+
          delivery_contact_person,
-         website,
+         delivery_street,
+         delivery_box,
+         delivery_postal_code,
+         delivery_city,
+         delivery_country_code,
+
          registered_street,
          registered_box,
          registered_postal_code,
          registered_city,
          registered_country_code,
+
          billing_street,
          billing_box,
          billing_postal_code,
          billing_city,
          billing_country_code,
+
+         website,
+         estimated_user_count,
          created_at,
          updated_at
        FROM companies
@@ -849,7 +862,44 @@ app.get('/api/company', requireAuth, async (req, res) => {
     );
 
     if (!rows.length) return res.status(404).json({ ok: false, error: 'Company not found.' });
-    return res.json({ ok: true, company: rows[0] });
+
+    const c = rows[0];
+
+    // Helper for computed address
+    const buildAddress = (street, box, pc, city, cc) =>
+      [safeText(street), safeText(box), [safeText(pc), safeText(city)].filter(Boolean).join(' ').trim(), safeText(cc)]
+        .filter(Boolean)
+        .join(', ');
+
+    // Prefer stored text fields if present, else build from parts
+    const registeredAddress =
+      safeText(c.registered_address) ||
+      buildAddress(c.registered_street, c.registered_box, c.registered_postal_code, c.registered_city, c.registered_country_code) ||
+      null;
+
+    const deliveryAddress =
+      buildAddress(c.delivery_street, c.delivery_box, c.delivery_postal_code, c.delivery_city, c.delivery_country_code) ||
+      null;
+
+    // UI hard-coded mapping (client-record page)
+    const company = {
+      ...c,
+
+      // Ensure these exist even if UI expects them
+      company_name: c.name,
+      main_contact: c.registered_contact_person || null,
+      invoices_sent_to: c.billing_email || null,
+      delivery_contact: c.delivery_contact_person || null,
+
+      registered_address: registeredAddress,
+      delivery_address: deliveryAddress,
+
+      // safety: normalize empty string -> null
+      customer_number: c.customer_number || null,
+      billing_reference: c.billing_reference || null
+    };
+
+    return res.json({ ok: true, company });
   } catch (err) {
     console.error('company error:', err);
     return res.status(500).json({ ok: false, error: 'Server error.' });
