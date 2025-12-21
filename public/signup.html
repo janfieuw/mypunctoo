@@ -224,7 +224,7 @@
                 <option value="FR">France</option>
                 <option value="DE">Germany</option>
                 <option value="GR">Greece</option>
-                <option value="HU">Greece</option>
+                <option value="HU">Hungary</option>
                 <option value="IE">Ireland</option>
                 <option value="IT">Italy</option>
                 <option value="LV">Latvia</option>
@@ -272,6 +272,7 @@
 
               <div class="order-note">€39 / piece</div>
 
+              <!-- ✅ MOVED: extra mention INSIDE the order block -->
               <div class="order-note">
                 You can also order one or more additional Plates later via your MyPunctoo dashboard.
               </div>
@@ -575,9 +576,9 @@
     });
   });
 
-  // ✅ restore token if user refreshes
+  // restore token after refresh
   const storedTok = sessionStorage.getItem('signup_token');
-  if (storedTok) signupTokenEl.value = storedTok;
+  if (storedTok && !signupTokenEl.value) signupTokenEl.value = storedTok;
 
   let currentStep = 1;
 
@@ -616,17 +617,13 @@
           return;
         }
 
-        // ✅ accept both keys (server returns signupToken; we also support signup_token)
-        const tok = data.signupToken || data.signup_token || data.token || '';
-        if (!tok) {
+        signupTokenEl.value = data.signupToken || data.signup_token || '';
+        if (!signupTokenEl.value) {
           showStatus('');
           showError('Signup token missing from server response.');
           return;
         }
-
-        signupTokenEl.value = tok;
-        sessionStorage.setItem('signup_token', tok);
-
+        sessionStorage.setItem('signup_token', signupTokenEl.value);
         billingEmailEl.value = (payload.email || '').trim().toLowerCase();
 
         showStatus('');
@@ -640,11 +637,6 @@
     }
 
     if (currentStep === 2) {
-      if (!signupTokenEl.value) {
-        showError('Missing signup token. Please restart signup.');
-        return;
-      }
-
       const deliveryIsDifferent = !!deliveryCheckbox.checked;
 
       const prefix = vatPrefixFor(regCountryEl.value);
@@ -654,6 +646,8 @@
 
       const payload = {
         signup_token: signupTokenEl.value,
+      signupToken: signupTokenEl.value,
+        signupToken: signupTokenEl.value,
         email: (emailEl.value || '').trim().toLowerCase(),
         password: passwordEl.value,
 
@@ -718,11 +712,6 @@
     showError('');
     showStatus('');
 
-    if (!signupTokenEl.value) {
-      showError('Missing signup token. Please restart signup.');
-      return;
-    }
-
     const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
     extraPlatesEl.value = String(qty);
     updateTotal();
@@ -734,6 +723,7 @@
 
     const payload = {
       signup_token: signupTokenEl.value,
+      signupToken: signupTokenEl.value,
       email: (emailEl.value || '').trim().toLowerCase(),
       password: passwordEl.value,
       extra_plates: qty,
