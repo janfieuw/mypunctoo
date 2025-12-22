@@ -5,7 +5,6 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { pool } = require('./db/db');
 
-leading = true;
 const app = express();
 const PORT = process.env.PORT || 3000;
 const rootDir = __dirname;
@@ -15,6 +14,7 @@ const rootDir = __dirname;
 // =========================================================
 app.use(express.json());
 
+// (Laat dit staan zoals je had: eenvoudige allow-list voor html pages)
 app.use((req, res, next) => {
   if (!req.path.endsWith('.html')) return next();
 
@@ -24,7 +24,6 @@ app.use((req, res, next) => {
   if (req.path === '/signup.html') return next();
   if (req.path === '/punch.html') return next();
 
-  // default fallback: allow
   return next();
 });
 
@@ -50,7 +49,6 @@ function genToken(bytes = 24) {
 function normalizeVatNumber(country, vatNumberRaw) {
   const cc = String(country || '').trim().toUpperCase();
   const raw = String(vatNumberRaw || '').trim().toUpperCase();
-
   const digits = raw.replace(/[^0-9]/g, '');
   if (!digits) return null;
 
@@ -58,7 +56,6 @@ function normalizeVatNumber(country, vatNumberRaw) {
     const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
     return `BE${last10}`;
   }
-
   return raw;
 }
 
@@ -91,6 +88,16 @@ function makeCompanyCode(companyName) {
 
   const suffix = String(Math.floor(1000 + Math.random() * 9000));
   return `${base || 'COMP'}-${suffix}`;
+}
+
+function pickBool(v) {
+  if (v === true || v === false) return v;
+  if (v === 1 || v === '1') return true;
+  if (v === 0 || v === '0') return false;
+  const s = String(v || '').trim().toLowerCase();
+  if (['true', 'yes', 'y', 'on'].includes(s)) return true;
+  if (['false', 'no', 'n', 'off'].includes(s)) return false;
+  return false;
 }
 
 async function getAuthUser(req) {
@@ -187,9 +194,7 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/logout', requireAuth(), async (req, res) => {
   try {
-    await pool.query(`UPDATE client_portal_users SET auth_token = NULL, updated_at = NOW() WHERE id = $1`, [
-      req.user.id
-    ]);
+    await pool.query(`UPDATE client_portal_users SET auth_token = NULL, updated_at = NOW() WHERE id = $1`, [req.user.id]);
     return res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -211,6 +216,8 @@ app.get('/api/me', requireAuth(), async (req, res) => {
 
 // =========================================================
 // Signup flow (3 steps)
+// DB schema reality:
+// signup_drafts has: signup_token, email, password_hash, draft_company (json), created_at, expires_at, updated_at
 // =========================================================
 
 app.post('/api/signup/step1', async (req, res) => {
@@ -232,10 +239,11 @@ app.post('/api/signup/step1', async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
     const signup_token = uuidv4();
 
+    // expires_at exists in your table: keep it (e.g. 2 hours)
     await pool.query(
-      `INSERT INTO signup_drafts (signup_token, email, password_hash, created_at, updated_at)
-       VALUES ($1,$2,$3,NOW(),NOW())`,
-      [signup_token, email, password_hash]
+      `INSERT INTO signup_drafts (signup_token, email, password_hash, draft_company, created_at, updated_at, expires_at)
+       VALUES ($1,$2,$3,$4::jsonb,NOW(),NOW(), NOW() + INTERVAL '2 hours')`,
+      [signup_token, email, password_hash, JSON.stringify({})]
     );
 
     return res.json({ ok: true, signup_token });
@@ -250,13 +258,18 @@ app.post('/api/signup/step2', async (req, res) => {
     const signup_token = String(req.body.signup_token || '').trim();
     if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
 
-    const { rows } = await pool.query(`SELECT signup_token FROM signup_drafts WHERE signup_token = $1 LIMIT 1`, [
-      signup_token
-    ]);
-    if (!rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
+    const draftQ = await pool.query(
+      `SELECT signup_token
+       FROM signup_drafts
+       WHERE signup_token = $1
+       LIMIT 1`,
+      [signup_token]
+    );
+    if (!draftQ.rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
 
     const payload = req.body || {};
 
+    // Normalize + validate expected keys from signup.html
     const company_name = safeText(payload.company_name);
     const country_code = safeText(payload.country_code) || 'BE';
     const vat_number = normalizeVatNumber(country_code, payload.vat_number);
@@ -273,14 +286,14 @@ app.post('/api/signup/step2', async (req, res) => {
     const billing_email = safeText(payload.billing_email);
     const billing_reference = safeText(payload.billing_reference);
 
-    const deliveryDifferent = !!payload.delivery_is_different;
+    const delivery_is_different = pickBool(payload.delivery_is_different);
 
-    const delivery_contact_person = deliveryDifferent ? safeText(payload.delivery_contact_person) : null;
-    const delivery_street = deliveryDifferent ? safeText(payload.delivery_street) : null;
-    const delivery_box = deliveryDifferent ? safeText(payload.delivery_box) : null;
-    const delivery_postal_code = deliveryDifferent ? safeText(payload.delivery_postal_code) : null;
-    const delivery_city = deliveryDifferent ? safeText(payload.delivery_city) : null;
-    const delivery_country_code = deliveryDifferent ? safeText(payload.delivery_country_code) : null;
+    const delivery_contact_person = delivery_is_different ? safeText(payload.delivery_contact_person) : null;
+    const delivery_street = delivery_is_different ? safeText(payload.delivery_street) : null;
+    const delivery_box = delivery_is_different ? safeText(payload.delivery_box) : null;
+    const delivery_postal_code = delivery_is_different ? safeText(payload.delivery_postal_code) : null;
+    const delivery_city = delivery_is_different ? safeText(payload.delivery_city) : null;
+    const delivery_country_code = delivery_is_different ? safeText(payload.delivery_country_code) : null;
 
     if (!company_name) return res.status(400).json({ ok: false, error: 'Company name is required.' });
     if (!vat_number) return res.status(400).json({ ok: false, error: 'Enterprise/EU business number is required.' });
@@ -290,6 +303,7 @@ app.post('/api/signup/step2', async (req, res) => {
     if (!registered_city) return res.status(400).json({ ok: false, error: 'Registered city is required.' });
     if (!billing_email || !isEmail(billing_email)) return res.status(400).json({ ok: false, error: 'Valid billing email is required.' });
 
+    // Keep BOTH: structured fields + computed lines
     const registered_address = buildAddressLineFromFields(
       registered_street,
       registered_box,
@@ -298,71 +312,50 @@ app.post('/api/signup/step2', async (req, res) => {
       registered_country_code
     );
 
-    const billing_address = buildAddressLineFromFields(
-      deliveryDifferent ? (delivery_street || registered_street) : registered_street,
-      deliveryDifferent ? (delivery_box || registered_box) : registered_box,
-      deliveryDifferent ? (delivery_postal_code || registered_postal_code) : registered_postal_code,
-      deliveryDifferent ? (delivery_city || registered_city) : registered_city,
-      deliveryDifferent ? (delivery_country_code || registered_country_code) : registered_country_code
-    );
+    const delivery_address = delivery_is_different
+      ? buildAddressLineFromFields(
+          delivery_street,
+          delivery_box,
+          delivery_postal_code,
+          delivery_city,
+          delivery_country_code
+        )
+      : null;
 
+    const draft_company = {
+      company_name,
+      country_code,
+      vat_number,
+      website,
+
+      registered_contact_person,
+      registered_street,
+      registered_box,
+      registered_postal_code,
+      registered_city,
+      registered_country_code,
+      registered_address,
+
+      billing_email,
+      billing_reference,
+
+      delivery_is_different,
+      delivery_contact_person,
+      delivery_street,
+      delivery_box,
+      delivery_postal_code,
+      delivery_city,
+      delivery_country_code,
+      delivery_address
+    };
+
+    // Merge JSON into draft_company (jsonb) and update updated_at
     await pool.query(
       `UPDATE signup_drafts
-       SET
-         company_name = $2,
-         country_code = $3,
-         vat_number = $4,
-         website = $5,
-
-         registered_contact_person = $6,
-         registered_street = $7,
-         registered_box = $8,
-         registered_postal_code = $9,
-         registered_city = $10,
-         registered_country_code = $11,
-         registered_address = $12,
-
-         billing_email = $13,
-         billing_reference = $14,
-         billing_address = $15,
-
-         delivery_is_different = $16,
-         delivery_contact_person = $17,
-         delivery_street = $18,
-         delivery_box = $19,
-         delivery_postal_code = $20,
-         delivery_city = $21,
-         delivery_country_code = $22,
-
-         updated_at = NOW()
+       SET draft_company = COALESCE(draft_company, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
        WHERE signup_token = $1`,
-      [
-        signup_token,
-        company_name,
-        country_code,
-        vat_number,
-        website,
-
-        registered_contact_person,
-        registered_street,
-        registered_box,
-        registered_postal_code,
-        registered_city,
-        registered_country_code,
-        registered_address,
-
-        billing_email,
-        billing_reference,
-        billing_address,
-
-        deliveryDifferent,
-        delivery_contact_person,
-        delivery_street,
-        delivery_box,
-        delivery_postal_code,
-        delivery_city,
-        delivery_country_code
-      ]
+      [signup_token, JSON.stringify(draft_company)]
     );
 
     return res.json({ ok: true });
@@ -382,120 +375,148 @@ app.post('/api/signup/step3', async (req, res) => {
     if (!rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
 
     const draft = rows[0];
+    const dc = draft.draft_company || {};
 
-    // Validate that step2 completed
-    if (!draft.company_name || !draft.vat_number || !draft.registered_contact_person || !draft.billing_email) {
+    // Validate that step2 completed (in JSON)
+    if (!dc.company_name || !dc.vat_number || !dc.registered_contact_person || !dc.billing_email) {
       return res.status(400).json({ ok: false, error: 'Signup draft incomplete. Please complete step 2.' });
     }
 
-    const companyName = draft.company_name;
-    const vatNumber = draft.vat_number;
-    const website = draft.website;
-
-    const regContact = draft.registered_contact_person;
-
-    const regStreet = draft.registered_street;
-    const regBox = draft.registered_box;
-    const regPostal = draft.registered_postal_code;
-    const regCity = draft.registered_city;
-    const regCountry = draft.registered_country_code;
-
-    const delContact = draft.delivery_contact_person;
-    const delStreet = draft.delivery_street;
-    const delBox = draft.delivery_box;
-    const delPostal = draft.delivery_postal_code;
-    const delCity = draft.delivery_city;
-    const delCountry = draft.delivery_country_code;
-
-    const deliveryDifferent = !!draft.delivery_is_different;
-
-    const billingEmail = draft.billing_email;
-    const billingReference = draft.billing_reference;
-
-    // Billing address = delivery address if different, else registered
-    const billingStreet = deliveryDifferent ? (delStreet || regStreet) : regStreet;
-    const billingBox = deliveryDifferent ? (delBox || regBox) : regBox;
-    const billingPostal = deliveryDifferent ? (delPostal || regPostal) : regPostal;
-    const billingCity = deliveryDifferent ? (delCity || regCity) : regCity;
-    const billingCountry = deliveryDifferent ? (delCountry || regCountry) : regCountry;
-
-    const registeredAddress = buildAddressLineFromFields(regStreet, regBox, regPostal, regCity, regCountry);
-    const billingAddress = buildAddressLineFromFields(billingStreet, billingBox, billingPostal, billingCity, billingCountry);
-
     await client.query('BEGIN');
 
-    const companyCode = makeCompanyCode(companyName);
-    const customerNumber = companyCode; // ✅ FIX: auto-generate customer number
+    const companyCode = makeCompanyCode(dc.company_name);
+    const customerNumber = companyCode; // simple default (later you can change to counter table)
 
+    // Compute addresses
+    const registeredAddress =
+      safeText(dc.registered_address) ||
+      buildAddressLineFromFields(
+        dc.registered_street,
+        dc.registered_box,
+        dc.registered_postal_code,
+        dc.registered_city,
+        dc.registered_country_code
+      );
+
+    const deliveryAddress =
+      safeText(dc.delivery_address) ||
+      (pickBool(dc.delivery_is_different)
+        ? buildAddressLineFromFields(
+            dc.delivery_street,
+            dc.delivery_box,
+            dc.delivery_postal_code,
+            dc.delivery_city,
+            dc.delivery_country_code
+          )
+        : null);
+
+    // Insert company
     const companyIns = await client.query(
       `INSERT INTO companies (
          company_code,
          customer_number,
          name,
          vat_number,
+
+         registered_contact_person,
          registered_address,
-         billing_address,
+
          billing_email,
          billing_reference,
-         estimated_user_count,
-         created_at,
-         updated_at,
-         registered_contact_person,
+         billing_address,
+
          delivery_contact_person,
+
          website,
+
          registered_street,
          registered_box,
          registered_postal_code,
          registered_city,
          registered_country_code,
+
          billing_street,
          billing_box,
          billing_postal_code,
          billing_city,
-         billing_country_code
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW(),
-         $10,$11,$12,
-         $13,$14,$15,$16,$17,
-         $18,$19,$20,$21,$22
+         billing_country_code,
+
+         delivery_street,
+         delivery_box,
+         delivery_postal_code,
+         delivery_city,
+         delivery_country_code,
+
+         estimated_user_count,
+         created_at,
+         updated_at
+       )
+       VALUES (
+         $1,$2,$3,$4,
+         $5,$6,
+         $7,$8,$9,
+         $10,
+         $11,
+         $12,$13,$14,$15,$16,
+         $17,$18,$19,$20,$21,
+         $22,$23,$24,$25,$26,
+         $27,
+         NOW(),NOW()
        )
        RETURNING id`,
       [
         companyCode,
         customerNumber,
-        companyName,
-        vatNumber || null,
+        dc.company_name,
+        dc.vat_number || null,
+
+        dc.registered_contact_person || null,
         registeredAddress || null,
-        billingAddress || null,
-        billingEmail || null,
-        billingReference || null,
-        0,
-        regContact || null,
-        (deliveryDifferent ? delContact : '') || null,
-        website || null,
-        regStreet || null,
-        regBox || null,
-        regPostal || null,
-        regCity || null,
-        regCountry || null,
-        billingStreet || null,
-        billingBox || null,
-        billingPostal || null,
-        billingCity || null,
-        billingCountry || null
+
+        dc.billing_email || null,
+        dc.billing_reference || null,
+        // billing_address: in jouw schema wordt dit gebruikt als “facturatie adresregel”
+        // Als je delivery_is_different gebruikt als facturatie-adres, pas dat hier aan.
+        registeredAddress || null,
+
+        pickBool(dc.delivery_is_different) ? (dc.delivery_contact_person || null) : null,
+
+        dc.website || null,
+
+        dc.registered_street || null,
+        dc.registered_box || null,
+        dc.registered_postal_code || null,
+        dc.registered_city || null,
+        dc.registered_country_code || null,
+
+        // billing_* (als je die niet apart vraagt in signup, laten we null)
+        null,
+        null,
+        null,
+        null,
+        null,
+
+        // delivery_* (enkel invullen als delivery_is_different)
+        pickBool(dc.delivery_is_different) ? (dc.delivery_street || null) : null,
+        pickBool(dc.delivery_is_different) ? (dc.delivery_box || null) : null,
+        pickBool(dc.delivery_is_different) ? (dc.delivery_postal_code || null) : null,
+        pickBool(dc.delivery_is_different) ? (dc.delivery_city || null) : null,
+        pickBool(dc.delivery_is_different) ? (dc.delivery_country_code || null) : null,
+
+        0
       ]
     );
 
     const companyId = companyIns.rows[0].id;
 
-    // ✅ FIX: do NOT insert UUID into an integer id column.
-    // Let Postgres create the integer id automatically.
+    // Insert admin user (id is SERIAL/identity; don't push UUID into integer)
     await client.query(
       `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id, created_at, updated_at)
        VALUES ($1,$2,'admin',true,$3,NOW(),NOW())`,
       [draft.email, draft.password_hash, companyId]
     );
 
+    // cleanup draft
     await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signup_token]);
 
     await client.query('COMMIT');
@@ -538,29 +559,27 @@ app.get('/api/company', requireAuth(), async (req, res) => {
       buildAddress(c.delivery_street, c.delivery_box, c.delivery_postal_code, c.delivery_city, c.delivery_country_code) ||
       null;
 
-    // ✅ FIX: fallback to registered address if delivery is empty
-    const deliveryAddress = rawDeliveryAddress || registeredAddress || null;
+    const deliveryAddress = rawDeliveryAddress || null;
 
-    // UI hard-coded mapping (client-record page)
+    // UI hard-coded mapping (client-record page expects these keys)
     const company = {
-  ...c,
+      ...c,
 
-  // UI-mapping (hard-coded keys)
-  company_name: c.name,
-  main_contact: c.registered_contact_person || null,
-  invoices_sent_to: c.billing_email || null,
-  delivery_contact: c.delivery_contact_person || null,
+      // hard-coded UI keys
+      company_name: c.name,
+      main_contact: c.registered_contact_person || null,
+      invoices_sent_to: c.billing_email || null,
+      delivery_contact: c.delivery_contact_person || null,
 
-  registered_address: registeredAddress,
-  delivery_address: deliveryAddress,
+      registered_address: registeredAddress,
+      delivery_address: deliveryAddress,
 
-  customer_number: c.customer_number || null,
-  billing_reference: c.billing_reference || null,
+      customer_number: c.customer_number || null,
+      billing_reference: c.billing_reference || null,
 
-  // ✅ CONTRACT
-  contract_start_date: c.created_at
-};
-
+      // contract start = account creation date (company created_at)
+      contract_start_date: c.created_at
+    };
 
     return res.json({ ok: true, company });
   } catch (e) {
