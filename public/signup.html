@@ -15,7 +15,6 @@
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
-
     <div class="auth-main">
 
       <div class="brand-row">
@@ -42,7 +41,8 @@
       <div id="formStatus" class="form-status"></div>
 
       <form id="signupForm" novalidate>
-        <input type="hidden" id="signupToken">
+        <!-- backend expects snake_case -->
+        <input type="hidden" id="signup_token" />
 
         <!-- STEP 1 -->
         <div id="step-1" class="form-step active">
@@ -71,7 +71,6 @@
 
         <!-- STEP 2 -->
         <div id="step-2" class="form-step">
-
           <h3 class="form-section-title">Company</h3>
 
           <div class="field">
@@ -81,7 +80,7 @@
 
           <div class="field">
             <label>Country *</label>
-            <select id="regCountry" required autocomplete="country">
+            <select id="country_code" required autocomplete="country">
               <option value="">Select country</option>
               <option value="AT">Austria</option>
               <option value="BE">Belgium</option>
@@ -117,15 +116,15 @@
             <label>Enterprise / EU business number *</label>
 
             <div class="prefix-input">
-              <span class="prefix-badge" id="enterprisePrefix">—</span>
-              <input id="enterpriseNumber" required placeholder="Select country first">
+              <span class="prefix-badge" id="vatPrefixBadge">—</span>
+              <input id="vat_number" required placeholder="Select country first">
             </div>
 
-            <div class="help-text help-text-normal" id="enterpriseHelp">
+            <div class="help-text help-text-normal" id="vatHelp">
               Select a country to see the suggested format.
             </div>
 
-            <div class="soft-warning" id="enterpriseWarn"></div>
+            <div class="soft-warning" id="vatWarn"></div>
           </div>
 
           <div class="field">
@@ -138,44 +137,47 @@
 
           <div class="field">
             <label>Contact person *</label>
-            <input id="regContactPerson" required autocomplete="name">
+            <input id="registered_contact_person" required autocomplete="name">
           </div>
 
           <div class="field">
             <label>Street + number *</label>
-            <input id="regStreet" required autocomplete="street-address">
+            <input id="registered_street" required autocomplete="street-address">
           </div>
 
           <div class="field">
             <label>Box (optional)</label>
-            <input id="regBox">
+            <input id="registered_box">
           </div>
 
           <div class="field-row">
             <div class="field">
               <label>Postal code *</label>
-              <input id="regPostal" required autocomplete="postal-code">
+              <input id="registered_postal_code" required autocomplete="postal-code">
             </div>
             <div class="field">
               <label>City *</label>
-              <input id="regCity" required autocomplete="address-level2">
+              <input id="registered_city" required autocomplete="address-level2">
             </div>
           </div>
+
+          <!-- Backend supports registered_country_code, but we keep it aligned with country_code -->
+          <input type="hidden" id="registered_country_code" />
 
           <h3 class="form-section-title">Billing</h3>
 
           <div class="field">
             <label>Billing e-mail *</label>
-            <input id="billingEmail" type="email" required>
+            <input id="billing_email" type="email" required>
           </div>
 
           <div class="field">
             <label>Billing reference / PO (optional)</label>
-            <input id="billingReference">
+            <input id="billing_reference">
           </div>
 
           <div class="checkbox-row">
-            <input type="checkbox" id="deliveryDifferent">
+            <input type="checkbox" id="delivery_is_different">
             <span>Delivery address for MyPunctoo plate is different from registered address</span>
           </div>
 
@@ -184,33 +186,33 @@
 
             <div class="field">
               <label>Contact person *</label>
-              <input id="delContactPerson">
+              <input id="delivery_contact_person">
             </div>
 
             <div class="field">
               <label>Street + number *</label>
-              <input id="delStreet">
+              <input id="delivery_street">
             </div>
 
             <div class="field">
               <label>Box (optional)</label>
-              <input id="delBox">
+              <input id="delivery_box">
             </div>
 
             <div class="field-row">
               <div class="field">
                 <label>Postal code *</label>
-                <input id="delPostal">
+                <input id="delivery_postal_code">
               </div>
               <div class="field">
                 <label>City *</label>
-                <input id="delCity">
+                <input id="delivery_city">
               </div>
             </div>
 
             <div class="field">
               <label>Country *</label>
-              <select id="delCountry">
+              <select id="delivery_country_code">
                 <option value="">Select country</option>
                 <option value="AT">Austria</option>
                 <option value="BE">Belgium</option>
@@ -272,7 +274,6 @@
 
               <div class="order-note">€39 / piece</div>
 
-              <!-- ✅ MOVED: extra mention INSIDE the order block --->
               <div class="order-note">
                 You can also order one or more additional Plates later via your MyPunctoo dashboard.
               </div>
@@ -306,12 +307,12 @@
     </div>
 
     <div class="auth-aside" aria-hidden="true"></div>
-
   </div>
 </div>
 
 <script>
 (function () {
+  // Steps
   const step1 = document.getElementById('step-1');
   const step2 = document.getElementById('step-2');
   const step3 = document.getElementById('step-3');
@@ -327,61 +328,58 @@
 
   const formError = document.getElementById('formError');
   const formStatus = document.getElementById('formStatus');
-  const signupTokenEl = document.getElementById('signupToken');
 
-  // Step 1
+  // Step 1 fields (backend expects: email, password)
+  const signupTokenEl = document.getElementById('signup_token');
   const emailEl = document.getElementById('email');
   const passwordEl = document.getElementById('password');
   const passwordConfirmEl = document.getElementById('passwordConfirm');
 
-  // Step 2
+  // Step 2 fields (backend expects these exact snake_case keys)
   const companyNameEl = document.getElementById('companyName');
-  const enterpriseNumberEl = document.getElementById('enterpriseNumber');
+  const countryCodeEl = document.getElementById('country_code');
+  const vatNumberEl = document.getElementById('vat_number');
   const websiteEl = document.getElementById('website');
 
-  const regCountryEl = document.getElementById('regCountry');
+  const regContactEl = document.getElementById('registered_contact_person');
+  const regStreetEl = document.getElementById('registered_street');
+  const regBoxEl = document.getElementById('registered_box');
+  const regPostalEl = document.getElementById('registered_postal_code');
+  const regCityEl = document.getElementById('registered_city');
+  const regCountryHiddenEl = document.getElementById('registered_country_code');
 
-  const regContactPersonEl = document.getElementById('regContactPerson');
-  const delContactPersonEl = document.getElementById('delContactPerson');
+  const billingEmailEl = document.getElementById('billing_email');
+  const billingRefEl = document.getElementById('billing_reference');
 
-  const regStreetEl = document.getElementById('regStreet');
-  const regBoxEl = document.getElementById('regBox');
-  const regPostalEl = document.getElementById('regPostal');
-  const regCityEl = document.getElementById('regCity');
-
-  const billingEmailEl = document.getElementById('billingEmail');
-  const billingReferenceEl = document.getElementById('billingReference');
-
-  const deliveryCheckbox = document.getElementById('deliveryDifferent');
+  const deliveryCheckbox = document.getElementById('delivery_is_different');
   const deliveryBlock = document.getElementById('deliveryBlock');
 
-  const delStreetEl = document.getElementById('delStreet');
-  const delBoxEl = document.getElementById('delBox');
-  const delPostalEl = document.getElementById('delPostal');
-  const delCityEl = document.getElementById('delCity');
-  const delCountryEl = document.getElementById('delCountry');
+  const delContactEl = document.getElementById('delivery_contact_person');
+  const delStreetEl = document.getElementById('delivery_street');
+  const delBoxEl = document.getElementById('delivery_box');
+  const delPostalEl = document.getElementById('delivery_postal_code');
+  const delCityEl = document.getElementById('delivery_city');
+  const delCountryEl = document.getElementById('delivery_country_code');
 
-  const enterprisePrefixEl = document.getElementById('enterprisePrefix');
-  const enterpriseHelpEl = document.getElementById('enterpriseHelp');
-  const enterpriseWarnEl = document.getElementById('enterpriseWarn');
+  // VAT UI helpers
+  const vatPrefixBadgeEl = document.getElementById('vatPrefixBadge');
+  const vatHelpEl = document.getElementById('vatHelp');
+  const vatWarnEl = document.getElementById('vatWarn');
 
-  // Step 3
+  // Step 3 UI
   const platesMinus = document.getElementById('platesMinus');
   const platesPlus = document.getElementById('platesPlus');
   const extraPlatesEl = document.getElementById('extraPlates');
   const salesTermsEl = document.getElementById('salesTerms');
-
   const totalTodayEl = document.getElementById('totalToday');
 
   const STARTUP_FEE = 49;
-  const MONTHLY_FEE = 9;
   const EXTRA_PLATE_PRICE = 39;
 
   function showError(msg) {
     formError.textContent = msg || '';
     formError.classList.toggle('visible', !!msg);
   }
-
   function showStatus(msg) {
     formStatus.textContent = msg || '';
     formStatus.classList.toggle('visible', !!msg);
@@ -416,11 +414,9 @@
     const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10);
     return Number.isFinite(n) ? n : fallback;
   }
-
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
-
   function updateTotal() {
     const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
     extraPlatesEl.value = String(qty);
@@ -432,15 +428,14 @@
     extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) - 1, 0, 99));
     updateTotal();
   });
-
   platesPlus.addEventListener('click', () => {
     extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) + 1, 0, 99));
     updateTotal();
   });
-
   extraPlatesEl.addEventListener('input', updateTotal);
   extraPlatesEl.addEventListener('blur', updateTotal);
 
+  // VAT helpers
   function vatPrefixFor(countryCode) {
     if (!countryCode) return '';
     if (countryCode === 'GR') return 'EL';
@@ -466,48 +461,49 @@
     CY: { example: 'CY12345678X', soft: /^CY\d{8}[A-Z]$/ }
   };
 
-  function normalizeEnterpriseValue(raw) {
+  function normalizeVatInput(raw) {
     return (raw || '')
       .trim()
       .toUpperCase()
       .replace(/[\s.\-\/]/g, '');
   }
 
-  function setEnterpriseUI() {
-    const cc = regCountryEl.value || '';
+  function setVatUI() {
+    const cc = (countryCodeEl.value || '').trim();
     const prefix = vatPrefixFor(cc);
 
-    enterprisePrefixEl.textContent = prefix || '—';
+    vatPrefixBadgeEl.textContent = prefix || '—';
+    regCountryHiddenEl.value = cc || '';
 
     if (!cc) {
-      enterpriseNumberEl.placeholder = 'Select country first';
-      enterpriseHelpEl.textContent = 'Select a country to see the suggested format.';
-      enterpriseWarnEl.textContent = '';
-      enterpriseWarnEl.style.display = 'none';
+      vatNumberEl.placeholder = 'Select country first';
+      vatHelpEl.textContent = 'Select a country to see the suggested format.';
+      vatWarnEl.textContent = '';
+      vatWarnEl.style.display = 'none';
       return;
     }
 
     const fmt = FORMAT_BY_PREFIX[prefix];
     const example = fmt?.example ? `Example: ${fmt.example}` : `Example: ${prefix}…`;
-    enterpriseNumberEl.placeholder = example;
+    vatNumberEl.placeholder = example;
 
-    enterpriseHelpEl.textContent =
+    vatHelpEl.textContent =
       (cc === 'BE')
         ? 'Belgium: use your ondernemingsnummer (BE0xxxxxxxxx).'
         : 'Other EU countries: use your VAT/business number as used on invoices.';
 
-    validateEnterpriseSoft();
+    validateVatSoft();
   }
 
-  function validateEnterpriseSoft() {
-    const cc = regCountryEl.value || '';
+  function validateVatSoft() {
+    const cc = (countryCodeEl.value || '').trim();
     const prefix = vatPrefixFor(cc);
     const fmt = FORMAT_BY_PREFIX[prefix];
 
-    const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
+    const norm = normalizeVatInput(vatNumberEl.value);
     if (!norm) {
-      enterpriseWarnEl.textContent = '';
-      enterpriseWarnEl.style.display = 'none';
+      vatWarnEl.textContent = '';
+      vatWarnEl.style.display = 'none';
       return;
     }
 
@@ -515,26 +511,26 @@
     const looksOk = fmt?.soft ? fmt.soft.test(withPrefix) : true;
 
     if (!looksOk) {
-      enterpriseWarnEl.textContent =
+      vatWarnEl.textContent =
         'This number looks unusual for the selected country. Please double-check (we won’t block you).';
-      enterpriseWarnEl.style.display = 'block';
+      vatWarnEl.style.display = 'block';
     } else {
-      enterpriseWarnEl.textContent = '';
-      enterpriseWarnEl.style.display = 'none';
+      vatWarnEl.textContent = '';
+      vatWarnEl.style.display = 'none';
     }
   }
 
-  regCountryEl.addEventListener('change', () => {
-    setEnterpriseUI();
+  countryCodeEl.addEventListener('change', () => {
+    setVatUI();
     if (deliveryCheckbox.checked && !delCountryEl.value) {
-      delCountryEl.value = regCountryEl.value || '';
+      delCountryEl.value = countryCodeEl.value || '';
     }
   });
 
-  enterpriseNumberEl.addEventListener('input', validateEnterpriseSoft);
-  enterpriseNumberEl.addEventListener('blur', validateEnterpriseSoft);
+  vatNumberEl.addEventListener('input', validateVatSoft);
+  vatNumberEl.addEventListener('blur', validateVatSoft);
 
-  setEnterpriseUI();
+  setVatUI();
 
   deliveryCheckbox.addEventListener('change', () => {
     const on = deliveryCheckbox.checked;
@@ -546,10 +542,11 @@
     });
 
     if (on) {
-      delCountryEl.value = regCountryEl.value || '';
+      delCountryEl.value = countryCodeEl.value || '';
     }
   });
 
+  // Uppercase most non-email fields (matches your previous behavior)
   function shouldUppercase(el) {
     if (!el) return false;
     if (el.tagName === 'SELECT') return true;
@@ -557,10 +554,9 @@
     if (el.tagName !== 'INPUT') return false;
 
     const t = (el.type || 'text').toLowerCase();
-    if (t === 'email' || t === 'password') return false;
+    if (t === 'email' || t === 'password' || t === 'url') return false;
     return true;
   }
-
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (!shouldUppercase(el)) return;
@@ -570,15 +566,84 @@
     try { el.setSelectionRange(start, end); } catch (_) {}
   });
 
+  // normalize emails
   [emailEl, billingEmailEl].forEach(el => {
     el.addEventListener('blur', () => {
       el.value = (el.value || '').trim().toLowerCase();
     });
   });
 
-  // restore token after refresh
+  // Restore token after refresh
   const storedTok = sessionStorage.getItem('signup_token');
   if (storedTok && !signupTokenEl.value) signupTokenEl.value = storedTok;
+
+  // Payload builders: EXACTLY what backend uses
+  function buildStep1Payload() {
+    return {
+      email: (emailEl.value || '').trim().toLowerCase(),
+      password: passwordEl.value || ''
+    };
+  }
+
+  function buildStep2Payload() {
+    const deliveryDifferent = !!deliveryCheckbox.checked;
+
+    // Normalize VAT number value in a predictable way
+    const cc = (countryCodeEl.value || '').trim();
+    const prefix = vatPrefixFor(cc);
+    const norm = normalizeVatInput(vatNumberEl.value);
+    const finalVat = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
+
+    const payload = {
+      signup_token: (signupTokenEl.value || '').trim(),
+
+      company_name: (companyNameEl.value || '').trim(),
+      country_code: cc || 'BE',
+      vat_number: (finalVat || '').trim(),
+      website: (websiteEl.value || '').trim() || null,
+
+      registered_contact_person: (regContactEl.value || '').trim(),
+      registered_street: (regStreetEl.value || '').trim(),
+      registered_box: (regBoxEl.value || '').trim() || null,
+      registered_postal_code: (regPostalEl.value || '').trim(),
+      registered_city: (regCityEl.value || '').trim(),
+      registered_country_code: cc || null,
+
+      billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
+      billing_reference: (billingRefEl.value || '').trim() || null,
+
+      delivery_is_different: deliveryDifferent
+    };
+
+    if (deliveryDifferent) {
+      payload.delivery_contact_person = (delContactEl.value || '').trim();
+      payload.delivery_street = (delStreetEl.value || '').trim();
+      payload.delivery_box = (delBoxEl.value || '').trim() || null;
+      payload.delivery_postal_code = (delPostalEl.value || '').trim();
+      payload.delivery_city = (delCityEl.value || '').trim();
+      payload.delivery_country_code = (delCountryEl.value || '').trim();
+    }
+
+    return payload;
+  }
+
+  function buildStep3Payload() {
+    return {
+      signup_token: (signupTokenEl.value || '').trim()
+    };
+  }
+
+  function isValidEmail(s) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+  }
+
+  function requireFilled(label, value) {
+    if (!String(value || '').trim()) {
+      showError(`${label} is required.`);
+      return false;
+    }
+    return true;
+  }
 
   let currentStep = 1;
 
@@ -587,81 +652,22 @@
     if (currentStep === 3) { currentStep = 2; go(2); return; }
   };
 
-function buildStep1Payload() {
-  return {
-    email: (emailEl.value || '').trim().toLowerCase(),
-    password: passwordEl.value || ''
-  };
-}
-
-function buildStep2Payload() {
-  const deliveryDifferent = !!deliveryCheckbox.checked;
-
-  // Normalize enterprise number the same way you already do in the UI
-  const prefix = vatPrefixFor(regCountryEl.value);
-  const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
-  const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
-
-  return {
-    signup_token: (signupTokenEl.value || '').trim(),
-
-    // Company core
-    company_name: (companyNameEl.value || '').trim(),
-    country_code: (regCountryEl.value || '').trim(),               // IMPORTANT: backend expects this
-    vat_number: (finalEnterprise || '').trim(),                      // IMPORTANT: backend expects vat_number
-    website: (websiteEl.value || '').trim() || null,
-
-    // Registered address
-    registered_contact_person: (regContactPersonEl.value || '').trim(),
-    registered_street: (regStreetEl.value || '').trim(),
-    registered_box: (regBoxEl.value || '').trim() || null,
-    registered_postal_code: (regPostalEl.value || '').trim(),
-    registered_city: (regCityEl.value || '').trim(),
-    registered_country_code: (regCountryEl.value || '').trim(),     // backend uses fallback if empty
-
-    // Billing
-    billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-    billing_reference: (billingReferenceEl.value || '').trim() || null,
-
-    // Delivery toggle
-    delivery_is_different: deliveryDifferent,
-
-    // Delivery fields: ONLY include when different
-    ...(deliveryDifferent
-      ? {
-          delivery_contact_person: (delContactPersonEl.value || '').trim(),
-          delivery_street: (delStreetEl.value || '').trim(),
-          delivery_box: (delBoxEl.value || '').trim() || null,
-          delivery_postal_code: (delPostalEl.value || '').trim(),
-          delivery_city: (delCityEl.value || '').trim(),
-          delivery_country_code: (delCountryEl.value || '').trim()
-        }
-      : {})
-  };
-}
-
-function buildStep3Payload() {
-  return {
-    signup_token: (signupTokenEl.value || '').trim()
-  };
-}
-
-
   nextBtn.onclick = async () => {
     showError('');
     showStatus('');
 
+    // STEP 1
     if (currentStep === 1) {
-      const payload = {
-        email: (emailEl.value || '').trim(),
-        password: passwordEl.value,
-        password_confirm: passwordConfirmEl.value
-      };
+      const email = (emailEl.value || '').trim().toLowerCase();
+      const password = passwordEl.value || '';
+      const confirm = passwordConfirmEl.value || '';
 
-      if (!payload.email || !payload.password || !payload.password_confirm) {
-        showError('Please fill in all required fields.');
-        return;
-      }
+      if (!email || !password || !confirm) { showError('Please fill in all required fields.'); return; }
+      if (!isValidEmail(email)) { showError('Invalid email.'); return; }
+      if (password.length < 8) { showError('Password must be at least 8 characters.'); return; }
+      if (password !== confirm) { showError('Passwords do not match.'); return; }
+
+      const payload = buildStep1Payload();
 
       showStatus('Creating your account...');
       try {
@@ -670,21 +676,26 @@ function buildStep3Payload() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await r.json();
-        if (!data.ok) {
+
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
           showStatus('');
           showError(data.error || 'Signup failed.');
           return;
         }
 
-        signupTokenEl.value = data.signupToken || data.signup_token || '';
+        // server returns signup_token (snake_case). We support both just in case.
+        signupTokenEl.value = (data.signup_token || data.signupToken || '').trim();
         if (!signupTokenEl.value) {
           showStatus('');
           showError('Signup token missing from server response.');
           return;
         }
+
         sessionStorage.setItem('signup_token', signupTokenEl.value);
-        billingEmailEl.value = (payload.email || '').trim().toLowerCase();
+
+        // convenience: billing email defaults to account email
+        billingEmailEl.value = email;
 
         showStatus('');
         currentStep = 2;
@@ -696,53 +707,31 @@ function buildStep3Payload() {
       return;
     }
 
+    // STEP 2
     if (currentStep === 2) {
-      const deliveryIsDifferent = !!deliveryCheckbox.checked;
+      // Lightweight frontend checks aligned with backend required fields
+      const payload = buildStep2Payload();
 
-      const prefix = vatPrefixFor(regCountryEl.value);
-      const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
-      const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
-      enterpriseNumberEl.value = finalEnterprise;
+      if (!requireFilled('Company name', payload.company_name)) return;
+      if (!requireFilled('Country', payload.country_code)) return;
+      if (!requireFilled('Enterprise / EU business number', payload.vat_number)) return;
 
-      const payload = {
-        signup_token: signupTokenEl.value,
-      signupToken: signupTokenEl.value,
-        signupToken: signupTokenEl.value,
-        email: (emailEl.value || '').trim().toLowerCase(),
-        password: passwordEl.value,
+      if (!requireFilled('Registered contact person', payload.registered_contact_person)) return;
+      if (!requireFilled('Registered street + number', payload.registered_street)) return;
+      if (!requireFilled('Registered postal code', payload.registered_postal_code)) return;
+      if (!requireFilled('Registered city', payload.registered_city)) return;
 
-company_name: (companyNameEl.value || '').trim(),
-vat_number: (enterpriseNumberEl.value || '').trim(), // <-- server verwacht vat_number
-website: (websiteEl.value || '').trim(),
+      if (!payload.billing_email || !isValidEmail(payload.billing_email)) {
+        showError('Valid billing email is required.');
+        return;
+      }
 
-
-        registered_contact_person: (regContactPersonEl.value || '').trim(),
-        delivery_contact_person: (delContactPersonEl.value || '').trim(),
-
-        registered_street: (regStreetEl.value || '').trim(),
-        registered_box: (regBoxEl.value || '').trim(),
-        registered_postal_code: (regPostalEl.value || '').trim(),
-        registered_city: (regCityEl.value || '').trim(),
-        registered_country_code: regCountryEl.value,
-
-        billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-        billing_reference: (billingReferenceEl.value || '').trim(),
-
-        delivery_is_different: deliveryIsDifferent,
-        delivery_street: (delStreetEl.value || '').trim(),
-        delivery_box: (delBoxEl.value || '').trim(),
-        delivery_postal_code: (delPostalEl.value || '').trim(),
-        delivery_city: (delCityEl.value || '').trim(),
-        delivery_country_code: delCountryEl.value
-      };
-
-      if (!deliveryIsDifferent) {
-        payload.delivery_contact_person = '';
-        payload.delivery_street = '';
-        payload.delivery_box = '';
-        payload.delivery_postal_code = '';
-        payload.delivery_city = '';
-        payload.delivery_country_code = '';
+      if (payload.delivery_is_different) {
+        if (!requireFilled('Delivery contact person', payload.delivery_contact_person)) return;
+        if (!requireFilled('Delivery street + number', payload.delivery_street)) return;
+        if (!requireFilled('Delivery postal code', payload.delivery_postal_code)) return;
+        if (!requireFilled('Delivery city', payload.delivery_city)) return;
+        if (!requireFilled('Delivery country', payload.delivery_country_code)) return;
       }
 
       showStatus('Saving your company details...');
@@ -752,8 +741,9 @@ website: (websiteEl.value || '').trim(),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await r.json();
-        if (!data.ok) {
+
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
           showStatus('');
           showError(data.error || 'Could not save company details.');
           return;
@@ -782,14 +772,8 @@ website: (websiteEl.value || '').trim(),
       return;
     }
 
-    const payload = {
-      signup_token: signupTokenEl.value,
-      signupToken: signupTokenEl.value,
-      email: (emailEl.value || '').trim().toLowerCase(),
-      password: passwordEl.value,
-      extra_plates: qty,
-      sales_terms: true
-    };
+    // Backend only requires signup_token for step3
+    const payload = buildStep3Payload();
 
     showStatus('Confirming your order...');
     try {
@@ -798,8 +782,9 @@ website: (websiteEl.value || '').trim(),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await r.json();
-      if (!data.ok) {
+
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
         showStatus('');
         showError(data.error || 'Order confirmation failed.');
         return;
