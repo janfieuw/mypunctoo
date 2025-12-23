@@ -587,6 +587,66 @@
     if (currentStep === 3) { currentStep = 2; go(2); return; }
   };
 
+function buildStep1Payload() {
+  return {
+    email: (emailEl.value || '').trim().toLowerCase(),
+    password: passwordEl.value || ''
+  };
+}
+
+function buildStep2Payload() {
+  const deliveryDifferent = !!deliveryCheckbox.checked;
+
+  // Normalize enterprise number the same way you already do in the UI
+  const prefix = vatPrefixFor(regCountryEl.value);
+  const norm = normalizeEnterpriseValue(enterpriseNumberEl.value);
+  const finalEnterprise = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
+
+  return {
+    signup_token: (signupTokenEl.value || '').trim(),
+
+    // Company core
+    company_name: (companyNameEl.value || '').trim(),
+    country_code: (regCountryEl.value || '').trim(),               // IMPORTANT: backend expects this
+    vat_number: (finalEnterprise || '').trim(),                      // IMPORTANT: backend expects vat_number
+    website: (websiteEl.value || '').trim() || null,
+
+    // Registered address
+    registered_contact_person: (regContactPersonEl.value || '').trim(),
+    registered_street: (regStreetEl.value || '').trim(),
+    registered_box: (regBoxEl.value || '').trim() || null,
+    registered_postal_code: (regPostalEl.value || '').trim(),
+    registered_city: (regCityEl.value || '').trim(),
+    registered_country_code: (regCountryEl.value || '').trim(),     // backend uses fallback if empty
+
+    // Billing
+    billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
+    billing_reference: (billingReferenceEl.value || '').trim() || null,
+
+    // Delivery toggle
+    delivery_is_different: deliveryDifferent,
+
+    // Delivery fields: ONLY include when different
+    ...(deliveryDifferent
+      ? {
+          delivery_contact_person: (delContactPersonEl.value || '').trim(),
+          delivery_street: (delStreetEl.value || '').trim(),
+          delivery_box: (delBoxEl.value || '').trim() || null,
+          delivery_postal_code: (delPostalEl.value || '').trim(),
+          delivery_city: (delCityEl.value || '').trim(),
+          delivery_country_code: (delCountryEl.value || '').trim()
+        }
+      : {})
+  };
+}
+
+function buildStep3Payload() {
+  return {
+    signup_token: (signupTokenEl.value || '').trim()
+  };
+}
+
+
   nextBtn.onclick = async () => {
     showError('');
     showStatus('');
