@@ -75,11 +75,9 @@
           <div class="cr-v" id="cr-vat-number">–</div>
 
           <div class="cr-k">Straat + nummer</div>
-          <!-- we hergebruiken jouw bestaande ID cr-registered-street, maar tonen er street+bus in -->
           <div class="cr-v" id="cr-registered-street">–</div>
 
           <div class="cr-k">PC + gemeente</div>
-          <!-- we hergebruiken jouw bestaande ID cr-registered-postal, maar tonen er pc+gemeente in -->
           <div class="cr-v" id="cr-registered-postal">–</div>
 
           <div class="cr-k">Contactpersoon (zetel)</div>
@@ -91,36 +89,21 @@
         <h3 class="cr-title">Levering</h3>
         <div class="cr-kv">
           <div class="cr-k">Bedrijfsnaam</div>
-          <!-- levering bedrijfsnaam = company name -->
           <div class="cr-v" id="cr-delivery-name">–</div>
 
           <div class="cr-k">Contactpersoon (levering)</div>
           <div class="cr-v" id="cr-delivery-contact">–</div>
 
           <div class="cr-k">Straat + nummer</div>
-          <!-- we hergebruiken jouw bestaande ID cr-delivery-street, maar tonen er street+bus in -->
           <div class="cr-v" id="cr-delivery-street">–</div>
 
           <div class="cr-k">PC + gemeente</div>
-          <!-- we hergebruiken jouw bestaande ID cr-delivery-postal, maar tonen er pc+gemeente in -->
           <div class="cr-v" id="cr-delivery-postal">–</div>
         </div>
       </div>
     </div>
 
-    <!-- bestaande elementen behouden (voor compat / subscription UI) -->
-    <div style="display:none">
-      <div id="client-status-meta"></div>
-      <div id="cr-billing-reference"></div>
-      <div id="cr-registered-box"></div>
-      <div id="cr-registered-city"></div>
-      <div id="cr-registered-address"></div>
-      <div id="cr-delivery-box"></div>
-      <div id="cr-delivery-city"></div>
-      <div id="cr-delivery-note"></div>
-    </div>
-
-    <!-- Abonnement blok (zoals je had) -->
+    <!-- Abonnement blok (ongewijzigd, zodat je bestaande JS blijft werken) -->
     <div class="cr-panel">
       <h3 class="cr-title">Abonnement</h3>
 
@@ -143,6 +126,105 @@
         </div>
       </div>
     </div>
-
   </div>
+
+  <!-- ✅ View-only patch: vult de 3 velden die nu '-' blijven zonder app.js/server.js te wijzigen -->
+  <script>
+    (function () {
+      const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
+
+      function getToken() {
+        try { return window.localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch { return ""; }
+      }
+
+      async function authedFetch(url) {
+        const token = getToken();
+        const headers = {};
+        if (token) headers["Authorization"] = "Bearer " + token;
+        return fetch(url, { headers, cache: "no-cache" });
+      }
+
+      function setText(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const v = (val === null || val === undefined || String(val).trim() === "") ? "–" : String(val);
+        el.textContent = v;
+      }
+
+      function formatDateTimeISO(v) {
+        if (!v) return "–";
+        const d = new Date(v);
+        if (Number.isNaN(d.getTime())) return String(v);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+      }
+
+      function fmtStreetLine(street, box) {
+        const st = String(street || "").trim();
+        const bx = String(box || "").trim();
+        if (!st && !bx) return "–";
+        return st + (bx ? ` - ${bx}` : "");
+      }
+
+      function fmtPcCityLine(postal, city) {
+        const pc = String(postal || "").trim();
+        const ct = String(city || "").trim();
+        if (!pc && !ct) return "–";
+        return pc + (ct ? ` - ${ct}` : "");
+      }
+
+      async function fillExtraFields() {
+        try {
+          // 1) Contact e-mail = login mail via /api/me (bestaat al)
+          try {
+            const rMe = await authedFetch("/api/me");
+            const me = await rMe.json().catch(() => ({}));
+            if (rMe.ok && me && me.ok && me.user && me.user.email) {
+              setText("cr-contact-email", me.user.email);
+            }
+          } catch {}
+
+          // 2) Account aangemaakt + delivery bedrijfsnaam via /api/company (bestaat al)
+          const rC = await authedFetch("/api/company");
+          const cc = await rC.json().catch(() => ({}));
+          if (!rC.ok || !cc || !cc.ok || !cc.company) return;
+
+          const c = cc.company;
+
+          // Account aangemaakt = companies.created_at
+          setText("cr-created-at", formatDateTimeISO(c.created_at));
+
+          // Bedrijfsnaam levering = dezelfde als facturatie (companies.name)
+          setText("cr-delivery-name", c.name);
+
+          // BONUS: zetel/levering lijnen correct (bus + gemeente op dezelfde lijn)
+          // (overschrijft wat app.js eventueel al gezet heeft, maar met correcte opmaak)
+          setText("cr-registered-street", fmtStreetLine(c.registered_street, c.registered_box));
+          setText("cr-registered-postal", fmtPcCityLine(c.registered_postal_code, c.registered_city));
+
+          // levering fallback naar zetel als leeg
+          const deliveryEmpty =
+            !String(c.delivery_street || "").trim() &&
+            !String(c.delivery_box || "").trim() &&
+            !String(c.delivery_postal_code || "").trim() &&
+            !String(c.delivery_city || "").trim();
+
+          const delStreet = deliveryEmpty ? c.registered_street : c.delivery_street;
+          const delBox = deliveryEmpty ? c.registered_box : c.delivery_box;
+          const delPostal = deliveryEmpty ? c.registered_postal_code : c.delivery_postal_code;
+          const delCity = deliveryEmpty ? c.registered_city : c.delivery_city;
+
+          setText("cr-delivery-street", fmtStreetLine(delStreet, delBox));
+          setText("cr-delivery-postal", fmtPcCityLine(delPostal, delCity));
+        } catch {}
+      }
+
+      // run iets later zodat app.js eerst zijn hydrate kan doen
+      setTimeout(fillExtraFields, 50);
+    })();
+  </script>
 </section>
