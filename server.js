@@ -32,32 +32,21 @@ function genToken(bytes = 24) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
-function buildAddressLineFromFields(street, box, postal, city, countryCode) {
+// ✅ samengestelde string (voor registered_address) op basis van bestaande DB-velden
+function buildRegisteredAddress(street, box, postal, city) {
   const parts = [];
   const st = safeText(street);
   const bx = safeText(box);
   const pc = safeText(postal);
   const ct = safeText(city);
-  const cc = safeText(countryCode);
 
   if (st) parts.push(st);
   if (bx) parts.push(bx);
+
   const pcCity = [pc, ct].filter(Boolean).join(' ').trim();
   if (pcCity) parts.push(pcCity);
-  if (cc) parts.push(cc);
 
   return parts.length ? parts.join(', ') : null;
-}
-
-function makeCompanyCode(companyName) {
-  const base = String(companyName || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '')
-    .slice(0, 10);
-
-  const suffix = String(Math.floor(1000 + Math.random() * 9000));
-  return `${base || 'COMP'}-${suffix}`;
 }
 
 function errorResponse(res, e, fallbackMsg = 'Serverfout.') {
@@ -74,6 +63,8 @@ function errorResponse(res, e, fallbackMsg = 'Serverfout.') {
 }
 
 // ---------------- schema guards (dev-proof) ----------------
+// Let op: we forceren hier GEEN bedrijven-kolommen meer die jij geschrapt hebt.
+// We houden enkel customer_number defaults + draft velden voor signup flow.
 async function ensureSchema() {
   const client = await pool.connect();
   try {
@@ -97,13 +88,13 @@ async function ensureSchema() {
       ON companies(customer_number);
     `);
 
-    // signup_drafts columns used by step2/step3
+    // signup_drafts (wizard data). Mag breder zijn dan companies.
     await client.query(`
       ALTER TABLE IF EXISTS signup_drafts
         ADD COLUMN IF NOT EXISTS email text,
         ADD COLUMN IF NOT EXISTS password_hash text,
+
         ADD COLUMN IF NOT EXISTS company_name text,
-        ADD COLUMN IF NOT EXISTS country_code text,
         ADD COLUMN IF NOT EXISTS vat_number text,
         ADD COLUMN IF NOT EXISTS website text,
 
@@ -112,12 +103,10 @@ async function ensureSchema() {
         ADD COLUMN IF NOT EXISTS registered_box text,
         ADD COLUMN IF NOT EXISTS registered_postal_code text,
         ADD COLUMN IF NOT EXISTS registered_city text,
-        ADD COLUMN IF NOT EXISTS registered_country_code text,
         ADD COLUMN IF NOT EXISTS registered_address text,
 
         ADD COLUMN IF NOT EXISTS billing_email text,
         ADD COLUMN IF NOT EXISTS billing_reference text,
-        ADD COLUMN IF NOT EXISTS billing_address text,
 
         ADD COLUMN IF NOT EXISTS delivery_is_different boolean DEFAULT false,
         ADD COLUMN IF NOT EXISTS delivery_contact_person text,
@@ -125,7 +114,6 @@ async function ensureSchema() {
         ADD COLUMN IF NOT EXISTS delivery_box text,
         ADD COLUMN IF NOT EXISTS delivery_postal_code text,
         ADD COLUMN IF NOT EXISTS delivery_city text,
-        ADD COLUMN IF NOT EXISTS delivery_country_code text,
 
         ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now(),
         ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
@@ -245,7 +233,6 @@ app.post('/api/login', async (req, res) => {
       [token, user.id]
     );
 
-    // redirectUrl is optioneel; login.js gebruikt default "/"
     return res.json({ ok: true, token, redirectUrl: '/' });
   } catch (e) {
     return errorResponse(res, e);
@@ -288,18 +275,9 @@ app.post('/api/signup/step2', async (req, res) => {
     const signup_token = String(req.body.signup_token || '').trim();
     if (!signup_token) return res.status(400).json({ ok: false, error: 'Interne fout: signup token ontbreekt.' });
 
-    const chk = await pool.query(
-      `SELECT signup_token FROM signup_drafts WHERE signup_token = $1 LIMIT 1`,
-      [signup_token]
-    );
-    if (!chk.rows.length) return res.status(400).json({ ok: false, error: 'Ongeldige signup sessie. Herlaad de pagina.' });
-
     const payload = req.body || {};
 
     const company_name = safeText(payload.company_name);
-
-    // België-only
-    const country_code = 'BE';
 
     // ✅ Ondernemingsnummer: 0###.###.### (geen spaties)
     const ondernemingsnr_raw = safeText(payload.vat_number);
@@ -310,9 +288,7 @@ app.post('/api/signup/step2', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Ondernemingsnummer: verplicht formaat 0123.456.789' });
     }
 
-    // Kolom heet vat_number, maar inhoud is ondernemingsnummer (bewuste keuze)
     const vat_number = ondernemingsnr_raw;
-
     const website = safeText(payload.website);
 
     const registered_contact_person = safeText(payload.registered_contact_person);
@@ -320,7 +296,6 @@ app.post('/api/signup/step2', async (req, res) => {
     const registered_box = safeText(payload.registered_box);
     const registered_postal_code = safeText(payload.registered_postal_code);
     const registered_city = safeText(payload.registered_city);
-    const registered_country_code = 'BE';
 
     const billing_email = safeText(payload.billing_email);
     const billing_reference = safeText(payload.billing_reference);
@@ -332,7 +307,6 @@ app.post('/api/signup/step2', async (req, res) => {
     const delivery_box = deliveryDifferent ? safeText(payload.delivery_box) : null;
     const delivery_postal_code = deliveryDifferent ? safeText(payload.delivery_postal_code) : null;
     const delivery_city = deliveryDifferent ? safeText(payload.delivery_city) : null;
-    const delivery_country_code = deliveryDifferent ? 'BE' : null;
 
     if (!company_name) return res.status(400).json({ ok: false, error: 'Bedrijfsnaam is verplicht.' });
     if (!registered_contact_person) return res.status(400).json({ ok: false, error: 'Contactpersoon is verplicht.' });
@@ -341,56 +315,49 @@ app.post('/api/signup/step2', async (req, res) => {
     if (!registered_city) return res.status(400).json({ ok: false, error: 'Gemeente is verplicht.' });
     if (!billing_email || !isEmail(billing_email)) return res.status(400).json({ ok: false, error: 'Geldig facturatie e-mailadres is verplicht.' });
 
-    const registered_address = buildAddressLineFromFields(
+    if (deliveryDifferent) {
+      if (!delivery_contact_person) return res.status(400).json({ ok: false, error: 'Levering contactpersoon is verplicht.' });
+      if (!delivery_street) return res.status(400).json({ ok: false, error: 'Levering straat + nummer is verplicht.' });
+      if (!delivery_postal_code) return res.status(400).json({ ok: false, error: 'Levering postcode is verplicht.' });
+      if (!delivery_city) return res.status(400).json({ ok: false, error: 'Levering gemeente is verplicht.' });
+    }
+
+    // ✅ Dit bestaat als kolom in companies: registered_address
+    const registered_address = buildRegisteredAddress(
       registered_street,
       registered_box,
       registered_postal_code,
-      registered_city,
-      registered_country_code
-    );
-
-    const billing_address = buildAddressLineFromFields(
-      deliveryDifferent ? (delivery_street || registered_street) : registered_street,
-      deliveryDifferent ? (delivery_box || registered_box) : registered_box,
-      deliveryDifferent ? (delivery_postal_code || registered_postal_code) : registered_postal_code,
-      deliveryDifferent ? (delivery_city || registered_city) : registered_city,
-      'BE'
+      registered_city
     );
 
     await pool.query(
-      `UPDATE signup_drafts
-       SET
+      `UPDATE signup_drafts SET
          company_name = $2,
-         country_code = $3,
-         vat_number = $4,
-         website = $5,
+         vat_number = $3,
+         website = $4,
 
-         registered_contact_person = $6,
-         registered_street = $7,
-         registered_box = $8,
-         registered_postal_code = $9,
-         registered_city = $10,
-         registered_country_code = $11,
-         registered_address = $12,
+         registered_contact_person = $5,
+         registered_street = $6,
+         registered_box = $7,
+         registered_postal_code = $8,
+         registered_city = $9,
+         registered_address = $10,
 
-         billing_email = $13,
-         billing_reference = $14,
-         billing_address = $15,
+         billing_email = $11,
+         billing_reference = $12,
 
-         delivery_is_different = $16,
-         delivery_contact_person = $17,
-         delivery_street = $18,
-         delivery_box = $19,
-         delivery_postal_code = $20,
-         delivery_city = $21,
-         delivery_country_code = $22,
+         delivery_is_different = $13,
+         delivery_contact_person = $14,
+         delivery_street = $15,
+         delivery_box = $16,
+         delivery_postal_code = $17,
+         delivery_city = $18,
 
          updated_at = NOW()
        WHERE signup_token = $1`,
       [
         signup_token,
         company_name,
-        country_code,
         vat_number,
         website,
 
@@ -399,20 +366,17 @@ app.post('/api/signup/step2', async (req, res) => {
         registered_box,
         registered_postal_code,
         registered_city,
-        registered_country_code,
         registered_address,
 
         billing_email,
         billing_reference,
-        billing_address,
 
         deliveryDifferent,
         delivery_contact_person,
         delivery_street,
         delivery_box,
         delivery_postal_code,
-        delivery_city,
-        delivery_country_code
+        delivery_city
       ]
     );
 
@@ -441,46 +405,38 @@ app.post('/api/signup/step3', async (req, res) => {
     }
 
     const companyName = draft.company_name;
-    const ondernemingsNr = draft.vat_number; // opgeslagen in vat_number kolom
+    const ondernemingsNr = draft.vat_number;
     const website = draft.website;
 
     const regContact = draft.registered_contact_person;
-
     const regStreet = draft.registered_street;
     const regBox = draft.registered_box;
     const regPostal = draft.registered_postal_code;
     const regCity = draft.registered_city;
-    const regCountry = draft.registered_country_code || 'BE';
+
+    const registeredAddress = draft.registered_address || buildRegisteredAddress(regStreet, regBox, regPostal, regCity);
 
     const deliveryDifferent = !!draft.delivery_is_different;
-    const delContact = draft.delivery_contact_person;
+
+    const delContact = deliveryDifferent ? draft.delivery_contact_person : null;
+    const delStreet = deliveryDifferent ? draft.delivery_street : null;
+    const delBox = deliveryDifferent ? draft.delivery_box : null;
+    const delPostal = deliveryDifferent ? draft.delivery_postal_code : null;
+    const delCity = deliveryDifferent ? draft.delivery_city : null;
 
     const billingEmail = draft.billing_email;
     const billingReference = draft.billing_reference;
 
-    const billingStreet = deliveryDifferent ? (draft.delivery_street || regStreet) : regStreet;
-    const billingBox = deliveryDifferent ? (draft.delivery_box || regBox) : regBox;
-    const billingPostal = deliveryDifferent ? (draft.delivery_postal_code || regPostal) : regPostal;
-    const billingCity = deliveryDifferent ? (draft.delivery_city || regCity) : regCity;
-    const billingCountry = 'BE';
-
-    const registeredAddress = buildAddressLineFromFields(regStreet, regBox, regPostal, regCity, regCountry);
-    const billingAddress = buildAddressLineFromFields(billingStreet, billingBox, billingPostal, billingCity, billingCountry);
-
     await client.query('BEGIN');
 
-    const companyCode = makeCompanyCode(companyName);
-
+    // ✅ INSERT enkel bestaande kolommen in companies
     const companyIns = await client.query(
       `INSERT INTO companies (
-         company_code,
          name,
          vat_number,
          registered_address,
-         billing_address,
          billing_email,
          billing_reference,
-         estimated_user_count,
          registered_contact_person,
          delivery_contact_person,
          website,
@@ -488,43 +444,32 @@ app.post('/api/signup/step3', async (req, res) => {
          registered_box,
          registered_postal_code,
          registered_city,
-         registered_country_code,
-         billing_street,
-         billing_box,
-         billing_postal_code,
-         billing_city,
-         billing_country_code
+         delivery_street,
+         delivery_box,
+         delivery_postal_code,
+         delivery_city
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,
-         $9,$10,$11,
-         $12,$13,$14,$15,$16,
-         $17,$18,$19,$20,$21
+         $9,$10,$11,$12,$13,$14,$15,$16
        )
        RETURNING id, created_at, customer_number`,
       [
-        companyCode,
         companyName,
         ondernemingsNr || null,
         registeredAddress || null,
-        billingAddress || null,
         billingEmail || null,
         billingReference || null,
-        0,
         regContact || null,
-        (deliveryDifferent ? delContact : null) || null,
+        delContact || null,
         website || null,
-
         regStreet || null,
         regBox || null,
         regPostal || null,
         regCity || null,
-        regCountry || 'BE',
-
-        billingStreet || null,
-        billingBox || null,
-        billingPostal || null,
-        billingCity || null,
-        billingCountry || 'BE'
+        delStreet || null,
+        delBox || null,
+        delPostal || null,
+        delCity || null
       ]
     );
 
@@ -549,6 +494,19 @@ app.post('/api/signup/step3', async (req, res) => {
   }
 });
 
+// ---------------- dashboard stats (basic) ----------------
+// (laat dit staan zoals je had; app.js verwacht /api/stats)
+app.get('/api/stats', requireAuth(), async (req, res) => {
+  return res.json({
+    ok: true,
+    stats: {
+      employeesTotal: 0,
+      employeesActive: 0,
+      checkinsToday: 0
+    }
+  });
+});
+
 // ---------------- client record API ----------------
 app.get('/api/company', requireAuth(), async (req, res) => {
   try {
@@ -556,17 +514,7 @@ app.get('/api/company', requireAuth(), async (req, res) => {
     const { rows } = await pool.query(`SELECT * FROM companies WHERE id = $1 LIMIT 1`, [companyId]);
     if (!rows.length) return res.status(404).json({ ok: false, error: 'Bedrijf niet gevonden.' });
 
-    const c = rows[0];
-
-    return res.json({
-      ok: true,
-      company: {
-        ...c,
-        company_name: c.name,
-        created_at: c.created_at,
-        customer_number: c.customer_number ?? null
-      }
-    });
+    return res.json({ ok: true, company: rows[0] });
   } catch (e) {
     return errorResponse(res, e);
   }

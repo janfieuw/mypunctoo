@@ -94,39 +94,14 @@
         <div class="client-label">Gemeente</div>
         <div class="client-value" id="cr-registered-city">–</div>
       </div>
-
-      <div class="client-row">
-        <div class="client-label">Landcode</div>
-        <div class="client-value" id="cr-registered-country">–</div>
-      </div>
     </div>
 
     <div class="client-block">
-      <h2 class="client-block-title">Facturatie-adres</h2>
+      <h2 class="client-block-title">Samenvatting (DB)</h2>
 
       <div class="client-row">
-        <div class="client-label">Straat + nummer</div>
-        <div class="client-value" id="cr-billing-street">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Bus</div>
-        <div class="client-value" id="cr-billing-box">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Postcode</div>
-        <div class="client-value" id="cr-billing-postal">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Gemeente</div>
-        <div class="client-value" id="cr-billing-city">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Landcode</div>
-        <div class="client-value" id="cr-billing-country">–</div>
+        <div class="client-label">Zetel (registered_address)</div>
+        <div class="client-value" id="cr-registered-address">–</div>
       </div>
     </div>
   </div>
@@ -157,27 +132,32 @@
       </div>
 
       <div class="client-row">
-        <div class="client-label">Landcode</div>
-        <div class="client-value" id="cr-delivery-country">–</div>
-      </div>
-
-      <div class="client-row">
         <div class="client-label">Opmerking</div>
         <div class="client-value" id="cr-delivery-note">–</div>
       </div>
     </div>
 
     <div class="client-block">
-      <h2 class="client-block-title">Samengestelde adressen</h2>
+      <h2 class="client-block-title">Abonnement</h2>
 
-      <div class="client-row">
-        <div class="client-label">Zetel (samenvatting)</div>
-        <div class="client-value" id="cr-registered-address">–</div>
+      <div class="sub-toggle">
+        <div class="sub-toggle-label">Subscription</div>
+        <button id="subscription-toggle" class="sub-toggle-switch sub-toggle-switch--on" type="button" aria-pressed="true">
+          <span class="sub-toggle-knob"></span>
+        </button>
       </div>
 
-      <div class="client-row">
-        <div class="client-label">Facturatie (samenvatting)</div>
-        <div class="client-value" id="cr-billing-address">–</div>
+      <!-- modal (zoals je had) -->
+      <div id="deactivate-modal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card">
+          <h3 class="modal-title">Subscription deactiveren?</h3>
+          <p class="modal-text">Dit is een UI-schakelaar (demo). In de echte flow gebeurt dit via support.</p>
+          <div class="modal-actions">
+            <button id="cancel-deactivate" class="btn-secondary" type="button">Annuleren</button>
+            <button id="confirm-deactivate" class="btn-primary" type="button">Bevestigen</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -191,145 +171,3 @@
     </a>
   </div>
 </section>
-
-<script>
-(function () {
-  const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
-
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function norm(v) {
-    if (v === null || v === undefined) return "";
-    const s = String(v).trim();
-    return s;
-  }
-
-  function coalesce(...vals) {
-    for (const v of vals) {
-      const s = norm(v);
-      if (s) return s;
-    }
-    return "";
-  }
-
-  function setText(id, value) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const v = norm(value);
-    el.textContent = v ? v : "–";
-  }
-
-  function formatDateTimeISO(v) {
-    if (!v) return "–";
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return String(v);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${y}-${m}-${day} ${hh}:${mm}`;
-  }
-
-  async function apiFetch(url, opts = {}) {
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
-    const headers = Object.assign({}, opts.headers || {});
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(url, Object.assign({}, opts, { headers }));
-  }
-
-  function hasAnyDeliveryAddress(c) {
-    return !!(
-      norm(c.delivery_street) ||
-      norm(c.delivery_box) ||
-      norm(c.delivery_postal_code) ||
-      norm(c.delivery_city)
-    );
-  }
-
-  async function hydrate() {
-    try {
-      const res = await apiFetch("/api/company", { cache: "no-cache" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error || "Kon bedrijf niet laden.");
-
-      const c = data.company || {};
-
-      // Meta (source of truth)
-      const metaEl = document.getElementById("client-status-meta");
-      if (metaEl) {
-        const created = formatDateTimeISO(c.created_at);
-        const custNo = c.customer_number ?? "–";
-        metaEl.innerHTML =
-          `Account aangemaakt: <strong>${escapeHtml(created)}</strong><br>` +
-          `Klantnummer: <strong>${escapeHtml(custNo)}</strong>`;
-      }
-
-      // Basis
-      setText("cr-name", coalesce(c.name, c.company_name));
-      setText("cr-vat-number", c.vat_number); // inhoud = ondernemingsnummer
-      setText("cr-customer-number", c.customer_number);
-      setText("cr-website", c.website);
-
-      // Contact/facturatie
-      const regContact = coalesce(c.registered_contact_person);
-      const delContact = coalesce(c.delivery_contact_person, regContact); // ✅ fallback
-      setText("cr-registered-contact", regContact);
-      setText("cr-billing-email", c.billing_email);
-      setText("cr-billing-reference", c.billing_reference);
-      setText("cr-delivery-contact", delContact);
-
-      // Zetel adres
-      setText("cr-registered-street", c.registered_street);
-      setText("cr-registered-box", c.registered_box);
-      setText("cr-registered-postal", c.registered_postal_code);
-      setText("cr-registered-city", c.registered_city);
-      setText("cr-registered-country", c.registered_country_code);
-
-      // Facturatie adres (exacte DB kolommen)
-      setText("cr-billing-street", c.billing_street);
-      setText("cr-billing-box", c.billing_box);
-      setText("cr-billing-postal", c.billing_postal_code);
-      setText("cr-billing-city", c.billing_city);
-      setText("cr-billing-country", c.billing_country_code);
-
-      // Levering: als NULL -> fallback naar zetel
-      const dStreet  = coalesce(c.delivery_street, c.registered_street);
-      const dBox     = coalesce(c.delivery_box, c.registered_box);
-      const dPostal  = coalesce(c.delivery_postal_code, c.registered_postal_code);
-      const dCity    = coalesce(c.delivery_city, c.registered_city);
-
-      setText("cr-delivery-street", dStreet);
-      setText("cr-delivery-box", dBox);
-      setText("cr-delivery-postal", dPostal);
-      setText("cr-delivery-city", dCity);
-
-      // Country voor levering: gebruik de bestaande registered_country_code (België-only)
-      setText("cr-delivery-country", coalesce(c.registered_country_code));
-
-      // Opmerking: bepaal “afwijkend” zonder delivery_is_different kolom
-      setText(
-        "cr-delivery-note",
-        hasAnyDeliveryAddress(c) ? "Afwijkend leveringsadres" : "Leveringsadres = maatschappelijke zetel"
-      );
-
-      // Samengestelde adressen (bestaan in jouw tabel)
-      setText("cr-registered-address", c.registered_address);
-      setText("cr-billing-address", c.billing_address);
-
-    } catch (e) {
-      console.warn(e);
-    }
-  }
-
-  hydrate();
-})();
-</script>
-

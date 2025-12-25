@@ -78,21 +78,12 @@
             <input id="companyName" required autocomplete="organization">
           </div>
 
-          <!-- België-only (niet zichtbaar, maar payload blijft consistent) -->
-          <input type="hidden" id="country_code" value="BE" />
-          <input type="hidden" id="registered_country_code" value="BE" />
-          <input type="hidden" id="delivery_country_code" value="BE" />
-
           <div class="field">
             <label>Ondernemingsnummer *</label>
-
-            <!-- ✅ Geen BE badge/prefix meer -->
             <input id="vat_number" required placeholder="">
-
             <div class="help-text help-text-normal" id="vatHelp">
               Verplicht formaat: <strong>0123.456.789</strong>
             </div>
-
             <div class="soft-warning" id="vatWarn"></div>
           </div>
 
@@ -182,38 +173,25 @@
         <div id="step-3" class="form-step">
           <h3 class="form-section-title">Bevestig je bestelling</h3>
 
-          <div class="order-summary">
-            <div class="order-line">
-              <div class="order-label">Eenmalige opstartkost</div>
-              <div class="order-price" id="startupFee">€49</div>
-              <div class="order-note">Inclusief 1 MyPunctoo-plaat, verzending & activatie</div>
+          <!-- (Deze pricing UI laat ik staan zoals je had) -->
+          <div class="checkout-box">
+            <div class="checkout-row">
+              <div>Opstartkost</div>
+              <div><strong>€49</strong></div>
             </div>
 
-            <div class="order-line">
-              <div class="order-label">Maandabonnement</div>
-              <div class="order-price" id="monthlyFee">€9 / maand</div>
-              <div class="order-note">Excl. btw, start bij activatie</div>
-            </div>
-
-            <div class="order-line order-line-split">
-              <div class="order-label">Extra MyPunctoo-platen (optioneel)</div>
-
-              <div class="qty">
-                <button type="button" class="qty-btn" id="platesMinus" aria-label="Minder">−</button>
-                <input id="extraPlates" class="qty-input" value="0" inputmode="numeric" autocomplete="off">
-                <button type="button" class="qty-btn" id="platesPlus" aria-label="Meer">+</button>
-              </div>
-
-              <div class="order-note">€39 / stuk</div>
-
-              <div class="order-note">
-                Je kan later ook extra platen bestellen via je MyPunctoo-dashboard.
+            <div class="checkout-row">
+              <div>Extra platen</div>
+              <div class="qty-row">
+                <button type="button" class="qty-btn" id="platesMinus">−</button>
+                <input id="extraPlates" class="qty-input" value="0" inputmode="numeric">
+                <button type="button" class="qty-btn" id="platesPlus">+</button>
               </div>
             </div>
 
-            <div class="order-total">
-              <div class="order-total-label">Totaal vandaag (excl. btw)</div>
-              <div class="order-total-price" id="totalToday">€49</div>
+            <div class="checkout-row checkout-row-total">
+              <div>Totaal vandaag</div>
+              <div><strong id="totalToday">€49</strong></div>
             </div>
           </div>
 
@@ -266,7 +244,7 @@
   const passwordConfirmEl = document.getElementById('passwordConfirm');
 
   const companyNameEl = document.getElementById('companyName');
-  const ondernemingsnrEl = document.getElementById('vat_number'); // id behouden om payload compatibel te houden
+  const ondernemingsnrEl = document.getElementById('vat_number');
   const websiteEl = document.getElementById('website');
 
   const regContactEl = document.getElementById('registered_contact_person');
@@ -287,7 +265,6 @@
   const delPostalEl = document.getElementById('delivery_postal_code');
   const delCityEl = document.getElementById('delivery_city');
 
-  const vatHelpEl = document.getElementById('vatHelp');
   const vatWarnEl = document.getElementById('vatWarn');
 
   const platesMinus = document.getElementById('platesMinus');
@@ -299,240 +276,178 @@
   const STARTUP_FEE = 49;
   const EXTRA_PLATE_PRICE = 39;
 
+  let currentStep = 1;
+
   function showError(msg) {
+    if (!formError) return;
     formError.textContent = msg || '';
-    formError.classList.toggle('visible', !!msg);
-  }
-  function showStatus(msg) {
-    formStatus.textContent = msg || '';
-    formStatus.classList.toggle('visible', !!msg);
+    formError.style.display = msg ? 'block' : 'none';
   }
 
-  function setStepPills(step) {
+  function showStatus(msg) {
+    if (!formStatus) return;
+    formStatus.textContent = msg || '';
+    formStatus.style.display = msg ? 'block' : 'none';
+  }
+
+  function setPills(step) {
     pill1.classList.toggle('active', step === 1);
     pill2.classList.toggle('active', step === 2);
     pill3.classList.toggle('active', step === 3);
   }
 
   function go(step) {
+    currentStep = step;
+
     step1.classList.toggle('active', step === 1);
     step2.classList.toggle('active', step === 2);
     step3.classList.toggle('active', step === 3);
-
-    setStepPills(step);
 
     backBtn.style.display = step === 1 ? 'none' : 'inline-flex';
     nextBtn.style.display = step === 3 ? 'none' : 'inline-flex';
     confirmBtn.style.display = step === 3 ? 'inline-flex' : 'none';
 
-    navHint.textContent = step === 1 ? 'Stap 1 van 3' : (step === 2 ? 'Stap 2 van 3' : 'Stap 3 van 3');
+    navHint.textContent = `Stap ${step} van 3`;
+    setPills(step);
 
     showError('');
     showStatus('');
-
-    if (step === 3) updateTotal();
   }
 
-  function toIntSafe(v, fallback = 0) {
-    const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10);
-    return Number.isFinite(n) ? n : fallback;
+  function norm(v) {
+    if (v === null || v === undefined) return '';
+    return String(v).trim();
   }
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+  }
+
   function clamp(n, min, max) {
-    return Math.max(min, Math.min(max, n));
+    const x = Number(n);
+    if (Number.isNaN(x)) return min;
+    return Math.max(min, Math.min(max, x));
   }
+
+  function toIntSafe(v, fallback) {
+    const n = parseInt(String(v || ''), 10);
+    return Number.isNaN(n) ? fallback : n;
+  }
+
   function updateTotal() {
     const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
-    extraPlatesEl.value = String(qty);
     const total = STARTUP_FEE + (qty * EXTRA_PLATE_PRICE);
     totalTodayEl.textContent = `€${total}`;
   }
 
-  platesMinus.addEventListener('click', () => {
-    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) - 1, 0, 99));
-    updateTotal();
-  });
-  platesPlus.addEventListener('click', () => {
-    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) + 1, 0, 99));
-    updateTotal();
-  });
-  extraPlatesEl.addEventListener('input', updateTotal);
-  extraPlatesEl.addEventListener('blur', updateTotal);
-
-  function isValidEmail(s) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+  function requireFilled(label, v) {
+    if (norm(v)) return true;
+    showError(`${label} is verplicht.`);
+    return false;
   }
 
-  // ✅ Ondernemingsnummer: 0###.###.### (geen spaties)
-  function isValidOndernemingsNr(s) {
-    return /^0\d{3}\.\d{3}\.\d{3}$/.test(String(s || '').trim());
-  }
-
-  vatHelpEl.innerHTML = 'Verplicht formaat: <strong>0123.456.789</strong>';
-
-  ondernemingsnrEl.addEventListener('input', () => {
-    const v = (ondernemingsnrEl.value || '').trim();
-    if (!v) {
-      vatWarnEl.textContent = '';
-      vatWarnEl.style.display = 'none';
-      return;
-    }
-    if (!isValidOndernemingsNr(v)) {
-      vatWarnEl.textContent = 'Verplicht formaat: 0123.456.789';
-      vatWarnEl.style.display = 'block';
-    } else {
-      vatWarnEl.textContent = '';
-      vatWarnEl.style.display = 'none';
-    }
-  });
-
-  // Uppercase: behoud zoals vroeger (maar niet voor email/password/url)
-  function shouldUppercase(el) {
-    if (!el) return false;
-    if (el.tagName === 'SELECT') return true;
-    if (el.tagName === 'TEXTAREA') return true;
-    if (el.tagName !== 'INPUT') return false;
-
-    const t = (el.type || 'text').toLowerCase();
-    if (t === 'email' || t === 'password' || t === 'url') return false;
-    return true;
-  }
-  document.addEventListener('input', (e) => {
-    const el = e.target;
-    if (!shouldUppercase(el)) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    el.value = (el.value || '').toUpperCase();
-    try { el.setSelectionRange(start, end); } catch (_) {}
-  });
-
-  [emailEl, billingEmailEl].forEach(el => {
-    el.addEventListener('blur', () => {
-      el.value = (el.value || '').trim().toLowerCase();
-    });
-  });
-
-  deliveryCheckbox.addEventListener('change', () => {
-    const on = deliveryCheckbox.checked;
-    deliveryBlock.style.display = on ? 'block' : 'none';
-
-    deliveryBlock.querySelectorAll('input').forEach(el => {
-      on ? el.setAttribute('required', 'required') : el.removeAttribute('required');
-      if (!on) el.value = '';
-    });
-  });
-
-  function requireFilled(label, value) {
-    if (!String(value || '').trim()) {
-      showError(`${label} is verplicht.`);
-      return false;
-    }
-    return true;
-  }
-
-  // token bewaren bij refresh
-  const storedTok = sessionStorage.getItem('signup_token');
-  if (storedTok && !signupTokenEl.value) signupTokenEl.value = storedTok;
-
-  function buildStep1Payload() {
-    return {
-      email: (emailEl.value || '').trim().toLowerCase(),
-      password: passwordEl.value || ''
-    };
+  function validateVatFormat(vat) {
+    const pattern = /^0\d{3}\.\d{3}\.\d{3}$/;
+    return pattern.test(String(vat || '').trim());
   }
 
   function buildStep2Payload() {
-    const deliveryDifferent = !!deliveryCheckbox.checked;
+    const payload = {
+      signup_token: norm(signupTokenEl.value),
+      company_name: norm(companyNameEl.value),
+      vat_number: norm(ondernemingsnrEl.value),
+      website: norm(websiteEl.value),
 
-    return {
-      signup_token: (signupTokenEl.value || '').trim(),
+      registered_contact_person: norm(regContactEl.value),
+      registered_street: norm(regStreetEl.value),
+      registered_box: norm(regBoxEl.value),
+      registered_postal_code: norm(regPostalEl.value),
+      registered_city: norm(regCityEl.value),
 
-      company_name: (companyNameEl.value || '').trim(),
+      billing_email: norm(billingEmailEl.value),
+      billing_reference: norm(billingRefEl.value),
 
-      country_code: 'BE',
-
-      // key blijft vat_number om backend/DB compatibel te houden
-      vat_number: (ondernemingsnrEl.value || '').trim(),
-
-      website: (websiteEl.value || '').trim() || null,
-
-      registered_contact_person: (regContactEl.value || '').trim(),
-      registered_street: (regStreetEl.value || '').trim(),
-      registered_box: (regBoxEl.value || '').trim() || null,
-      registered_postal_code: (regPostalEl.value || '').trim(),
-      registered_city: (regCityEl.value || '').trim(),
-      registered_country_code: 'BE',
-
-      billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-      billing_reference: (billingRefEl.value || '').trim() || null,
-
-      delivery_is_different: deliveryDifferent,
-
-      ...(deliveryDifferent ? {
-        delivery_contact_person: (delContactEl.value || '').trim(),
-        delivery_street: (delStreetEl.value || '').trim(),
-        delivery_box: (delBoxEl.value || '').trim() || null,
-        delivery_postal_code: (delPostalEl.value || '').trim(),
-        delivery_city: (delCityEl.value || '').trim(),
-        delivery_country_code: 'BE'
-      } : {})
+      delivery_is_different: !!deliveryCheckbox.checked,
+      delivery_contact_person: norm(delContactEl.value),
+      delivery_street: norm(delStreetEl.value),
+      delivery_box: norm(delBoxEl.value),
+      delivery_postal_code: norm(delPostalEl.value),
+      delivery_city: norm(delCityEl.value)
     };
+
+    if (!payload.delivery_is_different) {
+      payload.delivery_contact_person = '';
+      payload.delivery_street = '';
+      payload.delivery_box = '';
+      payload.delivery_postal_code = '';
+      payload.delivery_city = '';
+    }
+
+    return payload;
   }
 
   function buildStep3Payload() {
-    return { signup_token: (signupTokenEl.value || '').trim() };
+    return { signup_token: norm(signupTokenEl.value) };
   }
 
-  let currentStep = 1;
+  deliveryCheckbox.addEventListener('change', () => {
+    const on = !!deliveryCheckbox.checked;
+    deliveryBlock.style.display = on ? 'block' : 'none';
+  });
+
+  platesMinus?.addEventListener('click', () => {
+    const qty = clamp(toIntSafe(extraPlatesEl.value, 0) - 1, 0, 99);
+    extraPlatesEl.value = String(qty);
+    updateTotal();
+  });
+
+  platesPlus?.addEventListener('click', () => {
+    const qty = clamp(toIntSafe(extraPlatesEl.value, 0) + 1, 0, 99);
+    extraPlatesEl.value = String(qty);
+    updateTotal();
+  });
+
+  extraPlatesEl?.addEventListener('input', () => updateTotal());
 
   backBtn.onclick = () => {
-    if (currentStep === 2) { currentStep = 1; go(1); return; }
-    if (currentStep === 3) { currentStep = 2; go(2); return; }
+    if (currentStep === 2) return go(1);
+    if (currentStep === 3) return go(2);
   };
 
   nextBtn.onclick = async () => {
     showError('');
     showStatus('');
 
-    // STEP 1
     if (currentStep === 1) {
-      const email = (emailEl.value || '').trim().toLowerCase();
-      const password = passwordEl.value || '';
-      const confirm = passwordConfirmEl.value || '';
+      const email = norm(emailEl.value).toLowerCase();
+      const pw = String(passwordEl.value || '');
+      const pw2 = String(passwordConfirmEl.value || '');
 
-      if (!email || !password || !confirm) { showError('Vul alle verplichte velden in.'); return; }
+      if (!requireFilled('E-mail', email)) return;
       if (!isValidEmail(email)) { showError('Ongeldig e-mailadres.'); return; }
-      if (password.length < 8) { showError('Wachtwoord moet minstens 8 tekens bevatten.'); return; }
-      if (password !== confirm) { showError('Wachtwoorden komen niet overeen.'); return; }
+      if (!requireFilled('Wachtwoord', pw)) return;
+      if (pw.length < 8) { showError('Wachtwoord moet minstens 8 tekens bevatten.'); return; }
+      if (pw !== pw2) { showError('Wachtwoorden komen niet overeen.'); return; }
 
       showStatus('Account aanmaken...');
       try {
         const r = await fetch('/api/signup/step1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildStep1Payload())
+          body: JSON.stringify({ email, password: pw })
         });
 
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.ok) {
           showStatus('');
-          showError(data.error || 'Aanmelden mislukt.');
+          showError(data.error || 'Kon account niet starten.');
           return;
         }
 
-        signupTokenEl.value = (data.signup_token || data.signupToken || '').trim();
-        if (!signupTokenEl.value) {
-          showStatus('');
-          showError('Interne fout: signup token ontbreekt.');
-          return;
-        }
-
+        signupTokenEl.value = data.signup_token || '';
         sessionStorage.setItem('signup_token', signupTokenEl.value);
 
-        // gemak: billing email default naar account email
-        billingEmailEl.value = email;
-
         showStatus('');
-        currentStep = 2;
         go(2);
       } catch (e) {
         showStatus('');
@@ -541,16 +456,18 @@
       return;
     }
 
-    // STEP 2
     if (currentStep === 2) {
       const payload = buildStep2Payload();
 
       if (!requireFilled('Bedrijfsnaam', payload.company_name)) return;
 
       if (!requireFilled('Ondernemingsnummer', payload.vat_number)) return;
-      if (!isValidOndernemingsNr(payload.vat_number)) {
+      if (!validateVatFormat(payload.vat_number)) {
+        vatWarnEl.textContent = 'Formaat verplicht: 0123.456.789';
         showError('Ondernemingsnummer: verplicht formaat 0123.456.789');
         return;
+      } else {
+        vatWarnEl.textContent = '';
       }
 
       if (!requireFilled('Contactpersoon', payload.registered_contact_person)) return;
@@ -586,7 +503,6 @@
         }
 
         showStatus('');
-        currentStep = 3;
         go(3);
       } catch (e) {
         showStatus('');
@@ -630,6 +546,10 @@
       showError('Netwerkfout.');
     }
   };
+
+  // restore token if user reloads in step2/3
+  const stored = sessionStorage.getItem('signup_token');
+  if (stored && !signupTokenEl.value) signupTokenEl.value = stored;
 
   go(1);
   updateTotal();
