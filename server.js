@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Keep your existing pool module path
+// Pas dit pad enkel aan als jouw db module elders zit
 const { pool } = require('./db/db');
 
 const app = express();
@@ -14,15 +14,10 @@ const PORT = process.env.PORT || 3000;
 const rootDir = __dirname;
 const IS_PROD = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
-// =========================================================
-// Middleware
-// =========================================================
 app.use(express.json());
 app.use(express.static(path.join(rootDir, 'public')));
 
-// =========================================================
-// Helpers
-// =========================================================
+// ---------- helpers ----------
 function safeText(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
@@ -47,10 +42,8 @@ function buildAddressLineFromFields(street, box, postal, city, countryCode) {
 
   if (st) parts.push(st);
   if (bx) parts.push(bx);
-
   const pcCity = [pc, ct].filter(Boolean).join(' ').trim();
   if (pcCity) parts.push(pcCity);
-
   if (cc) parts.push(cc);
 
   return parts.length ? parts.join(', ') : null;
@@ -80,38 +73,28 @@ function errorResponse(res, e, fallbackMsg = 'Server error.') {
   return res.status(500).json({ ok: false, error: fallbackMsg });
 }
 
-// =========================================================
-// ✅ Startup schema guards
-// =========================================================
+// ---------- startup schema guards ----------
 async function ensureSchema() {
-  if (!pool) {
-    console.error('No DB pool (DATABASE_URL missing).');
-    return;
-  }
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Monotone customer number: sequence + default + unique index
+    // Monotone teller (sequence + default + unique index)
     await client.query(`CREATE SEQUENCE IF NOT EXISTS customer_number_seq START 1;`);
-
     await client.query(`
       ALTER TABLE IF EXISTS companies
       ALTER COLUMN created_at SET DEFAULT now();
     `);
-
     await client.query(`
       ALTER TABLE IF EXISTS companies
       ALTER COLUMN customer_number SET DEFAULT nextval('customer_number_seq');
     `);
-
     await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS companies_customer_number_ux
       ON companies(customer_number);
     `);
 
-    // signup_drafts needs these columns for step2 & step3 updates
+    // signup_drafts columns used by step2/step3
     await client.query(`
       ALTER TABLE IF EXISTS signup_drafts
         ADD COLUMN IF NOT EXISTS email text,
@@ -157,20 +140,15 @@ async function ensureSchema() {
 
 ensureSchema().catch((e) => console.error(e));
 
-// =========================================================
-// Pages
-// =========================================================
+// ---------- pages ----------
 app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
 app.get('/login', (req, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
 app.get('/signup', (req, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
 
-// =========================================================
-// Auth helpers
-// =========================================================
+// ---------- auth ----------
 async function getAuthUser(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
-
   const token = auth.slice('Bearer '.length).trim();
   if (!token) return null;
 
@@ -181,7 +159,6 @@ async function getAuthUser(req) {
      LIMIT 1`,
     [token]
   );
-
   if (!rows.length) return null;
   if (!rows[0].is_active) return null;
   return rows[0];
@@ -201,9 +178,6 @@ function requireAuth(role = null) {
   };
 }
 
-// =========================================================
-// Login / Logout
-// =========================================================
 app.post('/api/login', async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
@@ -228,7 +202,6 @@ app.post('/api/login', async (req, res) => {
     if (!ok) return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
 
     const token = genToken(24);
-
     await pool.query(
       `UPDATE client_portal_users
        SET auth_token = $1, updated_at = NOW()
@@ -242,21 +215,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/logout', requireAuth(), async (req, res) => {
-  try {
-    await pool.query(
-      `UPDATE client_portal_users SET auth_token = NULL, updated_at = NOW() WHERE id = $1`,
-      [req.user.id]
-    );
-    return res.json({ ok: true });
-  } catch (e) {
-    return errorResponse(res, e);
-  }
-});
-
-// =========================================================
-// Signup flow
-// =========================================================
+// ---------- signup ----------
 app.post('/api/signup/step1', async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
@@ -302,7 +261,7 @@ app.post('/api/signup/step2', async (req, res) => {
 
     const company_name = safeText(payload.company_name);
 
-    // Belgium-only: strict VAT format
+    // ✅ Belgium-only strict VAT
     const country_code = 'BE';
     const vat_number_raw = safeText(payload.vat_number);
     if (!vat_number_raw) return res.status(400).json({ ok: false, error: 'Enterprise number is required.' });
@@ -453,22 +412,17 @@ app.post('/api/signup/step3', async (req, res) => {
     const regCountry = draft.registered_country_code || 'BE';
 
     const delContact = draft.delivery_contact_person;
-    const delStreet = draft.delivery_street;
-    const delBox = draft.delivery_box;
-    const delPostal = draft.delivery_postal_code;
-    const delCity = draft.delivery_city;
-    const delCountry = draft.delivery_country_code || 'BE';
-
     const deliveryDifferent = !!draft.delivery_is_different;
 
     const billingEmail = draft.billing_email;
     const billingReference = draft.billing_reference;
 
-    const billingStreet = deliveryDifferent ? (delStreet || regStreet) : regStreet;
-    const billingBox = deliveryDifferent ? (delBox || regBox) : regBox;
-    const billingPostal = deliveryDifferent ? (delPostal || regPostal) : regPostal;
-    const billingCity = deliveryDifferent ? (delCity || regCity) : regCity;
-    const billingCountry = deliveryDifferent ? (delCountry || regCountry) : regCountry;
+    // billing uses delivery if different (same logic as step2)
+    const billingStreet = deliveryDifferent ? (draft.delivery_street || regStreet) : regStreet;
+    const billingBox = deliveryDifferent ? (draft.delivery_box || regBox) : regBox;
+    const billingPostal = deliveryDifferent ? (draft.delivery_postal_code || regPostal) : regPostal;
+    const billingCity = deliveryDifferent ? (draft.delivery_city || regCity) : regCity;
+    const billingCountry = 'BE';
 
     const registeredAddress = buildAddressLineFromFields(regStreet, regBox, regPostal, regCity, regCountry);
     const billingAddress = buildAddressLineFromFields(billingStreet, billingBox, billingPostal, billingCity, billingCountry);
@@ -476,8 +430,8 @@ app.post('/api/signup/step3', async (req, res) => {
     await client.query('BEGIN');
 
     // ✅ DB is source of truth:
-    // - companies.created_at is DEFAULT now()
-    // - companies.customer_number is DEFAULT nextval(...)
+    // - companies.created_at (DEFAULT now())
+    // - companies.customer_number (DEFAULT nextval(...))
     // - no companies.updated_at
     const companyCode = makeCompanyCode(companyName);
 
@@ -540,26 +494,17 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const companyId = companyIns.rows[0].id;
 
-    // Create admin portal user
     await client.query(
       `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id, created_at, updated_at)
        VALUES ($1,$2,'admin',true,$3,NOW(),NOW())`,
       [draft.email, draft.password_hash, companyId]
     );
 
-    // Cleanup draft
     await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signup_token]);
 
     await client.query('COMMIT');
 
-    return res.json({
-      ok: true,
-      company: {
-        id: companyIns.rows[0].id,
-        created_at: companyIns.rows[0].created_at,
-        customer_number: companyIns.rows[0].customer_number
-      }
-    });
+    return res.json({ ok: true, redirectUrl: '/login' });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
     return errorResponse(res, e, 'Could not create account.');
@@ -568,18 +513,14 @@ app.post('/api/signup/step3', async (req, res) => {
   }
 });
 
-// =========================================================
-// Company API (client record needs created_at + customer_number)
-// =========================================================
+// client-record uses this (created_at + customer_number)
 app.get('/api/company', requireAuth(), async (req, res) => {
   try {
     const companyId = req.user.company_id;
-
     const { rows } = await pool.query(`SELECT * FROM companies WHERE id = $1 LIMIT 1`, [companyId]);
     if (!rows.length) return res.status(404).json({ ok: false, error: 'Company not found.' });
 
     const c = rows[0];
-
     return res.json({
       ok: true,
       company: {
@@ -594,9 +535,6 @@ app.get('/api/company', requireAuth(), async (req, res) => {
   }
 });
 
-// =========================================================
-// Start
-// =========================================================
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
