@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Pas dit pad enkel aan als jouw db module elders zit
+// ✅ pas dit enkel aan als jouw db module anders staat
 const { pool } = require('./db/db');
 
 const app = express();
@@ -17,7 +17,7 @@ const IS_PROD = String(process.env.NODE_ENV || '').toLowerCase() === 'production
 app.use(express.json());
 app.use(express.static(path.join(rootDir, 'public')));
 
-// ---------- helpers ----------
+// ---------------- helpers ----------------
 function safeText(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
@@ -60,7 +60,7 @@ function makeCompanyCode(companyName) {
   return `${base || 'COMP'}-${suffix}`;
 }
 
-function errorResponse(res, e, fallbackMsg = 'Server error.') {
+function errorResponse(res, e, fallbackMsg = 'Serverfout.') {
   console.error(e);
   if (!IS_PROD) {
     return res.status(500).json({
@@ -73,22 +73,25 @@ function errorResponse(res, e, fallbackMsg = 'Server error.') {
   return res.status(500).json({ ok: false, error: fallbackMsg });
 }
 
-// ---------- startup schema guards ----------
+// ---------------- schema guards (dev-proof) ----------------
 async function ensureSchema() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Monotone teller (sequence + default + unique index)
+    // Monotone teller: customer_number_seq + default + unique index
     await client.query(`CREATE SEQUENCE IF NOT EXISTS customer_number_seq START 1;`);
+
     await client.query(`
       ALTER TABLE IF EXISTS companies
       ALTER COLUMN created_at SET DEFAULT now();
     `);
+
     await client.query(`
       ALTER TABLE IF EXISTS companies
       ALTER COLUMN customer_number SET DEFAULT nextval('customer_number_seq');
     `);
+
     await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS companies_customer_number_ux
       ON companies(customer_number);
@@ -129,10 +132,10 @@ async function ensureSchema() {
     `);
 
     await client.query('COMMIT');
-    console.log('✅ Schema ensured.');
+    console.log('✅ Schema gecontroleerd.');
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
-    console.error('❌ Schema ensure failed:', e);
+    console.error('❌ Schema guard faalde:', e);
   } finally {
     client.release();
   }
@@ -140,12 +143,12 @@ async function ensureSchema() {
 
 ensureSchema().catch((e) => console.error(e));
 
-// ---------- pages ----------
+// ---------------- pages ----------------
 app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
 app.get('/login', (req, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
 app.get('/signup', (req, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
 
-// ---------- auth ----------
+// ---------------- auth helpers ----------------
 async function getAuthUser(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
@@ -159,6 +162,7 @@ async function getAuthUser(req) {
      LIMIT 1`,
     [token]
   );
+
   if (!rows.length) return null;
   if (!rows[0].is_active) return null;
   return rows[0];
@@ -168,8 +172,8 @@ function requireAuth(role = null) {
   return async (req, res, next) => {
     try {
       const user = await getAuthUser(req);
-      if (!user) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      if (role && user.role !== role) return res.status(403).json({ ok: false, error: 'Forbidden' });
+      if (!user) return res.status(401).json({ ok: false, error: 'Niet aangemeld.' });
+      if (role && user.role !== role) return res.status(403).json({ ok: false, error: 'Geen toegang.' });
       req.user = user;
       next();
     } catch (e) {
@@ -178,13 +182,14 @@ function requireAuth(role = null) {
   };
 }
 
+// ---------------- login ----------------
 app.post('/api/login', async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
-    if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing credentials.' });
-    if (!isEmail(email)) return res.status(400).json({ ok: false, error: 'Invalid email.' });
+    if (!email || !password) return res.status(400).json({ ok: false, error: 'E-mail en wachtwoord zijn verplicht.' });
+    if (!isEmail(email)) return res.status(400).json({ ok: false, error: 'Ongeldig e-mailadres.' });
 
     const { rows } = await pool.query(
       `SELECT id, email, password_hash, role, is_active, company_id
@@ -194,12 +199,12 @@ app.post('/api/login', async (req, res) => {
       [email]
     );
 
-    if (!rows.length) return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    if (!rows.length) return res.status(401).json({ ok: false, error: 'Onjuiste login.' });
     const user = rows[0];
-    if (!user.is_active) return res.status(401).json({ ok: false, error: 'Account inactive.' });
+    if (!user.is_active) return res.status(401).json({ ok: false, error: 'Account is inactief.' });
 
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    if (!ok) return res.status(401).json({ ok: false, error: 'Onjuiste login.' });
 
     const token = genToken(24);
     await pool.query(
@@ -215,21 +220,21 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ---------- signup ----------
+// ---------------- signup ----------------
 app.post('/api/signup/step1', async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
-    if (!email || !password) return res.status(400).json({ ok: false, error: 'Email and password are required.' });
-    if (!isEmail(email)) return res.status(400).json({ ok: false, error: 'Invalid email.' });
-    if (password.length < 8) return res.status(400).json({ ok: false, error: 'Password must be at least 8 characters.' });
+    if (!email || !password) return res.status(400).json({ ok: false, error: 'E-mail en wachtwoord zijn verplicht.' });
+    if (!isEmail(email)) return res.status(400).json({ ok: false, error: 'Ongeldig e-mailadres.' });
+    if (password.length < 8) return res.status(400).json({ ok: false, error: 'Wachtwoord moet minstens 8 tekens bevatten.' });
 
     const exists = await pool.query(
       `SELECT 1 FROM client_portal_users WHERE lower(email) = lower($1) LIMIT 1`,
       [email]
     );
-    if (exists.rows.length) return res.status(400).json({ ok: false, error: 'Account already exists.' });
+    if (exists.rows.length) return res.status(400).json({ ok: false, error: 'Er bestaat al een account met dit e-mailadres.' });
 
     const password_hash = await bcrypt.hash(password, 10);
     const signup_token = uuidv4();
@@ -249,28 +254,32 @@ app.post('/api/signup/step1', async (req, res) => {
 app.post('/api/signup/step2', async (req, res) => {
   try {
     const signup_token = String(req.body.signup_token || '').trim();
-    if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
+    if (!signup_token) return res.status(400).json({ ok: false, error: 'Interne fout: signup token ontbreekt.' });
 
     const chk = await pool.query(
       `SELECT signup_token FROM signup_drafts WHERE signup_token = $1 LIMIT 1`,
       [signup_token]
     );
-    if (!chk.rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
+    if (!chk.rows.length) return res.status(400).json({ ok: false, error: 'Ongeldige signup sessie. Herlaad de pagina.' });
 
     const payload = req.body || {};
 
     const company_name = safeText(payload.company_name);
 
-    // ✅ Belgium-only strict VAT
+    // België-only
     const country_code = 'BE';
-    const vat_number_raw = safeText(payload.vat_number);
-    if (!vat_number_raw) return res.status(400).json({ ok: false, error: 'Enterprise number is required.' });
 
-    const beVatPattern = /^BE\s0\d{3}\.\s\d{3}\.\s\d{3}$/;
-    if (!beVatPattern.test(vat_number_raw)) {
-      return res.status(400).json({ ok: false, error: 'VAT format required: BE 0123. 456. 789' });
+    // ✅ Ondernemingsnummer: 0###.###.### (geen spaties)
+    const ondernemingsnr_raw = safeText(payload.vat_number);
+    if (!ondernemingsnr_raw) return res.status(400).json({ ok: false, error: 'Ondernemingsnummer is verplicht.' });
+
+    const pattern = /^0\d{3}\.\d{3}\.\d{3}$/;
+    if (!pattern.test(ondernemingsnr_raw)) {
+      return res.status(400).json({ ok: false, error: 'Ondernemingsnummer: verplicht formaat 0123.456.789' });
     }
-    const vat_number = vat_number_raw;
+
+    // Kolom heet vat_number, maar inhoud is ondernemingsnummer (bewuste keuze)
+    const vat_number = ondernemingsnr_raw;
 
     const website = safeText(payload.website);
 
@@ -293,12 +302,12 @@ app.post('/api/signup/step2', async (req, res) => {
     const delivery_city = deliveryDifferent ? safeText(payload.delivery_city) : null;
     const delivery_country_code = deliveryDifferent ? 'BE' : null;
 
-    if (!company_name) return res.status(400).json({ ok: false, error: 'Company name is required.' });
-    if (!registered_contact_person) return res.status(400).json({ ok: false, error: 'Registered contact person is required.' });
-    if (!registered_street) return res.status(400).json({ ok: false, error: 'Registered street + number is required.' });
-    if (!registered_postal_code) return res.status(400).json({ ok: false, error: 'Registered postal code is required.' });
-    if (!registered_city) return res.status(400).json({ ok: false, error: 'Registered city is required.' });
-    if (!billing_email || !isEmail(billing_email)) return res.status(400).json({ ok: false, error: 'Valid billing email is required.' });
+    if (!company_name) return res.status(400).json({ ok: false, error: 'Bedrijfsnaam is verplicht.' });
+    if (!registered_contact_person) return res.status(400).json({ ok: false, error: 'Contactpersoon is verplicht.' });
+    if (!registered_street) return res.status(400).json({ ok: false, error: 'Straat + nummer is verplicht.' });
+    if (!registered_postal_code) return res.status(400).json({ ok: false, error: 'Postcode is verplicht.' });
+    if (!registered_city) return res.status(400).json({ ok: false, error: 'Gemeente is verplicht.' });
+    if (!billing_email || !isEmail(billing_email)) return res.status(400).json({ ok: false, error: 'Geldig facturatie e-mailadres is verplicht.' });
 
     const registered_address = buildAddressLineFromFields(
       registered_street,
@@ -377,7 +386,7 @@ app.post('/api/signup/step2', async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    return errorResponse(res, e, 'Could not save company details.');
+    return errorResponse(res, e, 'Kon bedrijfsgegevens niet opslaan.');
   }
 });
 
@@ -385,22 +394,22 @@ app.post('/api/signup/step3', async (req, res) => {
   const client = await pool.connect();
   try {
     const signup_token = String(req.body.signup_token || '').trim();
-    if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
+    if (!signup_token) return res.status(400).json({ ok: false, error: 'Interne fout: signup token ontbreekt.' });
 
     const { rows } = await client.query(
       `SELECT * FROM signup_drafts WHERE signup_token = $1 LIMIT 1`,
       [signup_token]
     );
-    if (!rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
+    if (!rows.length) return res.status(400).json({ ok: false, error: 'Ongeldige signup sessie. Herlaad de pagina.' });
 
     const draft = rows[0];
 
     if (!draft.company_name || !draft.vat_number || !draft.registered_contact_person || !draft.billing_email) {
-      return res.status(400).json({ ok: false, error: 'Signup draft incomplete. Please complete step 2.' });
+      return res.status(400).json({ ok: false, error: 'Onvolledige gegevens. Vul stap 2 volledig in.' });
     }
 
     const companyName = draft.company_name;
-    const vatNumber = draft.vat_number;
+    const ondernemingsNr = draft.vat_number; // opgeslagen in vat_number kolom
     const website = draft.website;
 
     const regContact = draft.registered_contact_person;
@@ -411,13 +420,12 @@ app.post('/api/signup/step3', async (req, res) => {
     const regCity = draft.registered_city;
     const regCountry = draft.registered_country_code || 'BE';
 
-    const delContact = draft.delivery_contact_person;
     const deliveryDifferent = !!draft.delivery_is_different;
+    const delContact = draft.delivery_contact_person;
 
     const billingEmail = draft.billing_email;
     const billingReference = draft.billing_reference;
 
-    // billing uses delivery if different (same logic as step2)
     const billingStreet = deliveryDifferent ? (draft.delivery_street || regStreet) : regStreet;
     const billingBox = deliveryDifferent ? (draft.delivery_box || regBox) : regBox;
     const billingPostal = deliveryDifferent ? (draft.delivery_postal_code || regPostal) : regPostal;
@@ -429,10 +437,9 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('BEGIN');
 
-    // ✅ DB is source of truth:
-    // - companies.created_at (DEFAULT now())
-    // - companies.customer_number (DEFAULT nextval(...))
-    // - no companies.updated_at
+    // ✅ DB = source of truth:
+    // - companies.created_at DEFAULT now()
+    // - companies.customer_number DEFAULT nextval('customer_number_seq')
     const companyCode = makeCompanyCode(companyName);
 
     const companyIns = await client.query(
@@ -468,7 +475,7 @@ app.post('/api/signup/step3', async (req, res) => {
       [
         companyCode,
         companyName,
-        vatNumber || null,
+        ondernemingsNr || null,
         registeredAddress || null,
         billingAddress || null,
         billingEmail || null,
@@ -507,20 +514,21 @@ app.post('/api/signup/step3', async (req, res) => {
     return res.json({ ok: true, redirectUrl: '/login' });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
-    return errorResponse(res, e, 'Could not create account.');
+    return errorResponse(res, e, 'Kon account niet aanmaken.');
   } finally {
     client.release();
   }
 });
 
-// client-record uses this (created_at + customer_number)
+// ---------------- client record API ----------------
 app.get('/api/company', requireAuth(), async (req, res) => {
   try {
     const companyId = req.user.company_id;
     const { rows } = await pool.query(`SELECT * FROM companies WHERE id = $1 LIMIT 1`, [companyId]);
-    if (!rows.length) return res.status(404).json({ ok: false, error: 'Company not found.' });
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Bedrijf niet gevonden.' });
 
     const c = rows[0];
+
     return res.json({
       ok: true,
       company: {
@@ -536,5 +544,5 @@ app.get('/api/company', requireAuth(), async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server draait op poort ${PORT}`);
 });

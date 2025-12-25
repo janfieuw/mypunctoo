@@ -1,155 +1,174 @@
 <section class="card">
   <div class="client-header-row">
     <div>
-      <h1 class="card-title">Client record</h1>
+      <h1 class="card-title">Klantfiche</h1>
       <p class="card-text">
-        This is the official client record of your company in <strong>MyPunctoo</strong>.
-        It is used for your <strong>subscription</strong> and <strong>invoices</strong> and
-        cannot be edited directly in the portal.
+        Dit is de officiële klantfiche van je bedrijf in <strong>MyPunctoo</strong>.
+        Deze gegevens worden gebruikt voor <strong>abonnement</strong> en <strong>facturen</strong> en zijn niet rechtstreeks aanpasbaar in het portaal.
       </p>
     </div>
 
     <div class="client-status">
-      <span class="client-status-label">Subscription</span>
+      <span class="client-status-label">Status</span>
       <span class="client-status-badge client-status-badge--active" id="client-status-badge">
-        Active
+        Actief
       </span>
 
       <div class="client-status-meta" id="client-status-meta">
-        <div>Subscription no.: <span>–</span></div>
-        <div>Start date: <span>–</span></div>
-      </div>
-
-      <div class="client-toggle">
-        <div class="client-toggle-text">
-          Set subscription inactive<br>
-          <span class="client-toggle-muted">
-            When inactive, clocking is disabled. Your data remains available.
-          </span>
-        </div>
-
-        <label class="switch">
-          <input type="checkbox" id="subscription-toggle">
-          <span class="slider"></span>
-        </label>
-
-        <div class="client-toggle-state" id="toggle-state">OFF</div>
+        Account aangemaakt: <strong>–</strong><br>
+        Klantnummer: <strong>–</strong>
       </div>
     </div>
   </div>
 
-  <div class="client-record-note">
-    <span class="client-record-note-pill">
-      Your client record is READ-ONLY: Please contact our administration for changes.
-    </span>
-  </div>
+  <div class="client-grid">
+    <div class="client-block">
+      <h2 class="client-block-title">Basisgegevens</h2>
 
-  <!-- UPDATED LAYOUT -->
-  <div class="client-record-box">
+      <div class="client-row">
+        <div class="client-label">Bedrijfsnaam</div>
+        <div class="client-value" id="cr-company-name">–</div>
+      </div>
 
-    <!-- BOX 1 -->
-    <div class="client-record-section">
-      <div class="client-record-grid client-record-grid--4">
+      <div class="client-row">
+        <div class="client-label">Ondernemingsnummer</div>
+        <div class="client-value" id="cr-vat">–</div>
+      </div>
 
-        <div class="client-field">
-          <div class="client-field-label">Company name</div>
-          <div class="client-field-value">
-            <span id="cr-company-name">–</span><br>
-            <span class="client-field-muted">VAT: <span id="cr-vat">–</span></span>
-          </div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Contract start</div>
-          <div class="client-field-value" id="cr-contract-start">–</div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Customer number</div>
-          <div class="client-field-value" id="cr-customer-number">–</div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Billing reference / PO</div>
-          <div class="client-field-value">
-            <span id="cr-billing-ref">–</span>
-            <span class="client-field-tag">optional</span>
-          </div>
-        </div>
-
+      <div class="client-row">
+        <div class="client-label">Klantnummer</div>
+        <div class="client-value" id="cr-customer-number">–</div>
       </div>
     </div>
 
-    <!-- BOX 2 -->
-    <div class="client-record-section">
-      <div class="client-record-grid client-record-grid--4">
+    <div class="client-block">
+      <h2 class="client-block-title">Contact & facturatie</h2>
 
-        <div class="client-field">
-          <div class="client-field-label">Registered address</div>
-          <div class="client-field-value client-field-value--multiline" id="cr-registered-address">–</div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Main contact</div>
-          <div class="client-field-value">
-            <span id="cr-contact-name">–</span><br>
-            <span class="client-field-muted" id="cr-contact-role"></span>
-          </div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Delivery address</div>
-          <div class="client-field-value client-field-value--multiline" id="cr-delivery-address">–</div>
-        </div>
-
-        <div class="client-field">
-          <div class="client-field-label">Delivery contact</div>
-          <div class="client-field-value" id="cr-delivery-contact">–</div>
-        </div>
-
+      <div class="client-row">
+        <div class="client-label">Contactpersoon</div>
+        <div class="client-value" id="cr-contact-name">–</div>
       </div>
 
-      <div class="client-record-subgrid">
-        <div class="client-field">
-          <div class="client-field-label">Invoices sent to</div>
-          <div class="client-field-value" id="cr-invoice-email">–</div>
-        </div>
+      <div class="client-row">
+        <div class="client-label">Facturen naar</div>
+        <div class="client-value" id="cr-invoice-email">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Referentie / PO</div>
+        <div class="client-value" id="cr-billing-ref">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Leveringscontact</div>
+        <div class="client-value" id="cr-delivery-contact">–</div>
       </div>
     </div>
-
   </div>
-  <!-- /UPDATED LAYOUT -->
 
-  <div class="client-footer-row">
-    <p class="client-footnote">
-      This record is the basis for your subscription and all invoices in <strong>Invoices</strong>.
-      Need a change?
+  <div class="client-contact">
+    <p class="client-contact-text">
+      Wijziging nodig? Neem contact op met support.
     </p>
     <a class="client-contact-btn" href="mailto:support@mypunctoo.com">
-      Request change
+      Wijziging aanvragen
     </a>
   </div>
 
-  <!-- Deactivation modal blijft ongewijzigd -->
+  <!-- Modal (optioneel: behouden voor compatibiliteit met bestaande UI) -->
   <div class="modal" id="deactivate-modal" aria-hidden="true">
     <div class="modal-backdrop"></div>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
-      <h2 class="modal-title" id="deactivate-title">Deactivate subscription?</h2>
+      <h2 class="modal-title" id="deactivate-title">Abonnement deactiveren?</h2>
       <p class="modal-text">
-        If you deactivate your subscription, <strong>clocking will be disabled immediately</strong>.
-        Your account and historical data remain available in read-only mode.
+        Als je je abonnement deactiveert, wordt <strong>klokken onmiddellijk uitgeschakeld</strong>.
+        Je account en historische data blijven beschikbaar in alleen-lezen modus.
       </p>
       <p class="modal-text">
-        You can re-activate your subscription at any time from this screen.
+        Je kan op elk moment opnieuw activeren vanuit dit scherm.
       </p>
       <div class="modal-actions">
         <button type="button" class="modal-btn modal-btn--secondary" id="cancel-deactivate">
-          Cancel
+          Annuleren
         </button>
         <button type="button" class="modal-btn modal-btn--danger" id="confirm-deactivate">
-          Yes, deactivate
+          Ja, deactiveer
         </button>
       </div>
     </div>
   </div>
 </section>
+
+<script>
+(function () {
+  const AUTH_TOKEN_KEY = "mypunctoo_auth_token";
+
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const v = value === null || value === undefined || String(value).trim() === "" ? "–" : String(value);
+    el.textContent = v;
+  }
+
+  function formatDateTimeISO(v) {
+    if (!v) return "–";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${day} ${hh}:${mm}`;
+  }
+
+  async function apiFetch(url, opts = {}) {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+    const headers = Object.assign({}, opts.headers || {});
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(url, Object.assign({}, opts, { headers }));
+  }
+
+  async function hydrate() {
+    try {
+      const res = await apiFetch("/api/company", { cache: "no-cache" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || "Kon bedrijf niet laden.");
+
+      const c = data.company || {};
+
+      setText("cr-company-name", c.company_name || c.name);
+      setText("cr-vat", c.vat_number); // inhoud = ondernemingsnummer
+      setText("cr-customer-number", c.customer_number);
+
+      setText("cr-contact-name", c.main_contact || c.registered_contact_person);
+      setText("cr-invoice-email", c.invoices_sent_to || c.billing_email);
+      setText("cr-billing-ref", c.billing_reference);
+      setText("cr-delivery-contact", c.delivery_contact || c.delivery_contact_person);
+
+      const metaEl = document.getElementById("client-status-meta");
+      if (metaEl) {
+        const created = formatDateTimeISO(c.created_at);
+        const custNo = c.customer_number ?? "–";
+        metaEl.innerHTML =
+          `Account aangemaakt: <strong>${escapeHtml(created)}</strong><br>` +
+          `Klantnummer: <strong>${escapeHtml(custNo)}</strong>`;
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  hydrate();
+})();
+</script>
