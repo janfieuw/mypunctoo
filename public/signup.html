@@ -87,12 +87,6 @@
             <div class="soft-warning" id="vatWarn"></div>
           </div>
 
-          <div class="field">
-            <label>Website (optioneel)</label>
-            <input id="website" type="url" placeholder="https://voorbeeld.be">
-            <div class="help-text">Laat leeg indien niet van toepassing.</div>
-          </div>
-
           <h3 class="form-section-title">Maatschappelijke zetel</h3>
 
           <div class="field">
@@ -173,7 +167,6 @@
         <div id="step-3" class="form-step">
           <h3 class="form-section-title">Bevestig je bestelling</h3>
 
-          <!-- (Deze pricing UI laat ik staan zoals je had) -->
           <div class="checkout-box">
             <div class="checkout-row">
               <div>Opstartkost</div>
@@ -245,7 +238,6 @@
 
   const companyNameEl = document.getElementById('companyName');
   const ondernemingsnrEl = document.getElementById('vat_number');
-  const websiteEl = document.getElementById('website');
 
   const regContactEl = document.getElementById('registered_contact_person');
   const regStreetEl = document.getElementById('registered_street');
@@ -356,7 +348,6 @@
       signup_token: norm(signupTokenEl.value),
       company_name: norm(companyNameEl.value),
       vat_number: norm(ondernemingsnrEl.value),
-      website: norm(websiteEl.value),
 
       registered_contact_person: norm(regContactEl.value),
       registered_street: norm(regStreetEl.value),
@@ -557,3 +548,4 @@
 </script>
 </body>
 </html>
+

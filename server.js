@@ -63,7 +63,7 @@ function errorResponse(res, e, fallbackMsg = 'Serverfout.') {
 }
 
 // ---------------- schema guards (dev-proof) ----------------
-// Let op: we forceren hier GEEN bedrijven-kolommen meer die jij geschrapt hebt.
+// Let op: we forceren hier GEEN companies-kolommen meer die jij geschrapt hebt.
 // We houden enkel customer_number defaults + draft velden voor signup flow.
 async function ensureSchema() {
   const client = await pool.connect();
@@ -96,7 +96,6 @@ async function ensureSchema() {
 
         ADD COLUMN IF NOT EXISTS company_name text,
         ADD COLUMN IF NOT EXISTS vat_number text,
-        ADD COLUMN IF NOT EXISTS website text,
 
         ADD COLUMN IF NOT EXISTS registered_contact_person text,
         ADD COLUMN IF NOT EXISTS registered_street text,
@@ -289,7 +288,6 @@ app.post('/api/signup/step2', async (req, res) => {
     }
 
     const vat_number = ondernemingsnr_raw;
-    const website = safeText(payload.website);
 
     const registered_contact_person = safeText(payload.registered_contact_person);
     const registered_street = safeText(payload.registered_street);
@@ -334,24 +332,23 @@ app.post('/api/signup/step2', async (req, res) => {
       `UPDATE signup_drafts SET
          company_name = $2,
          vat_number = $3,
-         website = $4,
 
-         registered_contact_person = $5,
-         registered_street = $6,
-         registered_box = $7,
-         registered_postal_code = $8,
-         registered_city = $9,
-         registered_address = $10,
+         registered_contact_person = $4,
+         registered_street = $5,
+         registered_box = $6,
+         registered_postal_code = $7,
+         registered_city = $8,
+         registered_address = $9,
 
-         billing_email = $11,
-         billing_reference = $12,
+         billing_email = $10,
+         billing_reference = $11,
 
-         delivery_is_different = $13,
-         delivery_contact_person = $14,
-         delivery_street = $15,
-         delivery_box = $16,
-         delivery_postal_code = $17,
-         delivery_city = $18,
+         delivery_is_different = $12,
+         delivery_contact_person = $13,
+         delivery_street = $14,
+         delivery_box = $15,
+         delivery_postal_code = $16,
+         delivery_city = $17,
 
          updated_at = NOW()
        WHERE signup_token = $1`,
@@ -359,7 +356,6 @@ app.post('/api/signup/step2', async (req, res) => {
         signup_token,
         company_name,
         vat_number,
-        website,
 
         registered_contact_person,
         registered_street,
@@ -406,7 +402,6 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const companyName = draft.company_name;
     const ondernemingsNr = draft.vat_number;
-    const website = draft.website;
 
     const regContact = draft.registered_contact_person;
     const regStreet = draft.registered_street;
@@ -429,7 +424,7 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('BEGIN');
 
-    // ✅ INSERT enkel bestaande kolommen in companies
+    // ✅ INSERT enkel bestaande kolommen in companies (ZONDER website)
     const companyIns = await client.query(
       `INSERT INTO companies (
          name,
@@ -439,7 +434,6 @@ app.post('/api/signup/step3', async (req, res) => {
          billing_reference,
          registered_contact_person,
          delivery_contact_person,
-         website,
          registered_street,
          registered_box,
          registered_postal_code,
@@ -449,8 +443,8 @@ app.post('/api/signup/step3', async (req, res) => {
          delivery_postal_code,
          delivery_city
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,
-         $9,$10,$11,$12,$13,$14,$15,$16
+         $1,$2,$3,$4,$5,$6,$7,
+         $8,$9,$10,$11,$12,$13,$14,$15
        )
        RETURNING id, created_at, customer_number`,
       [
@@ -461,7 +455,6 @@ app.post('/api/signup/step3', async (req, res) => {
         billingReference || null,
         regContact || null,
         delContact || null,
-        website || null,
         regStreet || null,
         regBox || null,
         regPostal || null,

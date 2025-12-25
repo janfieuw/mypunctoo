@@ -256,7 +256,7 @@ async function hydrateDashboard() {
 }
 
 // =========================
-// Client record (NOW: DB-accurate)
+// Client record (DB-accurate, zonder website)
 // =========================
 async function hydrateClientRecord() {
   try {
@@ -288,13 +288,11 @@ async function hydrateClientRecord() {
     set("cr-name", c.name);
     set("cr-vat-number", c.vat_number);
     set("cr-customer-number", c.customer_number);
-    set("cr-website", c.website);
 
     // Contact & facturatie
     set("cr-registered-contact", c.registered_contact_person);
     set("cr-billing-email", c.billing_email);
     set("cr-billing-reference", c.billing_reference);
-    set("cr-delivery-contact", c.delivery_contact_person);
 
     // Zetel
     set("cr-registered-street", c.registered_street);
@@ -302,32 +300,32 @@ async function hydrateClientRecord() {
     set("cr-registered-postal", c.registered_postal_code);
     set("cr-registered-city", c.registered_city);
 
-    // Note: als alle levering velden leeg zijn -> levering = zetel
-const allDeliveryEmpty =
-  !String(c.delivery_street || "").trim() &&
-  !String(c.delivery_box || "").trim() &&
-  !String(c.delivery_postal_code || "").trim() &&
-  !String(c.delivery_city || "").trim();
+    // Samenvatting zetel (bestaat als kolom)
+    setAddress("cr-registered-address", c.registered_address);
 
-// Levering (met fallback naar zetel)
-const deliveryStreet = allDeliveryEmpty ? c.registered_street : c.delivery_street;
-const deliveryBox    = allDeliveryEmpty ? c.registered_box : c.delivery_box;
-const deliveryPostal = allDeliveryEmpty ? c.registered_postal_code : c.delivery_postal_code;
-const deliveryCity   = allDeliveryEmpty ? c.registered_city : c.delivery_city;
+    // Detecteer of levering leeg is
+    const allDeliveryEmpty =
+      !String(c.delivery_street || "").trim() &&
+      !String(c.delivery_box || "").trim() &&
+      !String(c.delivery_postal_code || "").trim() &&
+      !String(c.delivery_city || "").trim();
 
-set("cr-delivery-street", deliveryStreet);
-set("cr-delivery-box", deliveryBox);
-set("cr-delivery-postal", deliveryPostal);
-set("cr-delivery-city", deliveryCity);
+    // Levering: fallback naar zetel als leeg
+    const deliveryStreet = allDeliveryEmpty ? c.registered_street : c.delivery_street;
+    const deliveryBox    = allDeliveryEmpty ? c.registered_box : c.delivery_box;
+    const deliveryPostal = allDeliveryEmpty ? c.registered_postal_code : c.delivery_postal_code;
+    const deliveryCity   = allDeliveryEmpty ? c.registered_city : c.delivery_city;
 
-// Leveringscontact (ook fallback)
-set(
-  "cr-delivery-contact",
-  allDeliveryEmpty ? c.registered_contact_person : c.delivery_contact_person
-);
+    set("cr-delivery-street", deliveryStreet);
+    set("cr-delivery-box", deliveryBox);
+    set("cr-delivery-postal", deliveryPostal);
+    set("cr-delivery-city", deliveryCity);
 
-set("cr-delivery-note", allDeliveryEmpty ? "Leveringsadres = maatschappelijke zetel" : "—");
-
+    // Leveringscontact: ook fallback
+    set(
+      "cr-delivery-contact",
+      allDeliveryEmpty ? c.registered_contact_person : c.delivery_contact_person
+    );
 
     set("cr-delivery-note", allDeliveryEmpty ? "Leveringsadres = maatschappelijke zetel" : "—");
 
