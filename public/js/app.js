@@ -302,21 +302,32 @@ async function hydrateClientRecord() {
     set("cr-registered-postal", c.registered_postal_code);
     set("cr-registered-city", c.registered_city);
 
-    // Levering
-    set("cr-delivery-street", c.delivery_street);
-    set("cr-delivery-box", c.delivery_box);
-    set("cr-delivery-postal", c.delivery_postal_code);
-    set("cr-delivery-city", c.delivery_city);
-
-    // Samenvatting zetel (bestaat echt als kolom)
-    setAddress("cr-registered-address", c.registered_address);
-
     // Note: als alle levering velden leeg zijn -> levering = zetel
-    const allDeliveryEmpty =
-      !String(c.delivery_street || "").trim() &&
-      !String(c.delivery_box || "").trim() &&
-      !String(c.delivery_postal_code || "").trim() &&
-      !String(c.delivery_city || "").trim();
+const allDeliveryEmpty =
+  !String(c.delivery_street || "").trim() &&
+  !String(c.delivery_box || "").trim() &&
+  !String(c.delivery_postal_code || "").trim() &&
+  !String(c.delivery_city || "").trim();
+
+// Levering (met fallback naar zetel)
+const deliveryStreet = allDeliveryEmpty ? c.registered_street : c.delivery_street;
+const deliveryBox    = allDeliveryEmpty ? c.registered_box : c.delivery_box;
+const deliveryPostal = allDeliveryEmpty ? c.registered_postal_code : c.delivery_postal_code;
+const deliveryCity   = allDeliveryEmpty ? c.registered_city : c.delivery_city;
+
+set("cr-delivery-street", deliveryStreet);
+set("cr-delivery-box", deliveryBox);
+set("cr-delivery-postal", deliveryPostal);
+set("cr-delivery-city", deliveryCity);
+
+// Leveringscontact (ook fallback)
+set(
+  "cr-delivery-contact",
+  allDeliveryEmpty ? c.registered_contact_person : c.delivery_contact_person
+);
+
+set("cr-delivery-note", allDeliveryEmpty ? "Leveringsadres = maatschappelijke zetel" : "—");
+
 
     set("cr-delivery-note", allDeliveryEmpty ? "Leveringsadres = maatschappelijke zetel" : "—");
 
