@@ -12,7 +12,6 @@
       <span class="client-status-label">Status</span>
       <span class="client-status-badge client-status-badge--active" id="client-status-badge">Actief</span>
 
-      <!-- ✅ alleen nog de 2 “source of truth” velden -->
       <div class="client-status-meta" id="client-status-meta">
         Account aangemaakt: <strong>–</strong><br>
         Klantnummer: <strong>–</strong>
@@ -20,19 +19,19 @@
     </div>
   </div>
 
+  <!-- Rij 1 -->
   <div class="client-grid">
-    <!-- Basisgegevens -->
     <div class="client-block">
       <h2 class="client-block-title">Basisgegevens</h2>
 
       <div class="client-row">
         <div class="client-label">Bedrijfsnaam</div>
-        <div class="client-value" id="cr-company-name">–</div>
+        <div class="client-value" id="cr-name">–</div>
       </div>
 
       <div class="client-row">
         <div class="client-label">Ondernemingsnummer</div>
-        <div class="client-value" id="cr-enterprise-number">–</div>
+        <div class="client-value" id="cr-vat-number">–</div>
       </div>
 
       <div class="client-row">
@@ -46,7 +45,6 @@
       </div>
     </div>
 
-    <!-- Contact & facturatie -->
     <div class="client-block">
       <h2 class="client-block-title">Contact & facturatie</h2>
 
@@ -62,7 +60,7 @@
 
       <div class="client-row">
         <div class="client-label">Referentie / PO</div>
-        <div class="client-value" id="cr-billing-ref">–</div>
+        <div class="client-value" id="cr-billing-reference">–</div>
       </div>
 
       <div class="client-row">
@@ -72,7 +70,7 @@
     </div>
   </div>
 
-  <!-- Adressen -->
+  <!-- Rij 2 -->
   <div class="client-grid" style="margin-top: 18px;">
     <div class="client-block">
       <h2 class="client-block-title">Maatschappelijke zetel</h2>
@@ -96,8 +94,45 @@
         <div class="client-label">Gemeente</div>
         <div class="client-value" id="cr-registered-city">–</div>
       </div>
+
+      <div class="client-row">
+        <div class="client-label">Landcode</div>
+        <div class="client-value" id="cr-registered-country">–</div>
+      </div>
     </div>
 
+    <div class="client-block">
+      <h2 class="client-block-title">Facturatie-adres</h2>
+
+      <div class="client-row">
+        <div class="client-label">Straat + nummer</div>
+        <div class="client-value" id="cr-billing-street">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Bus</div>
+        <div class="client-value" id="cr-billing-box">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Postcode</div>
+        <div class="client-value" id="cr-billing-postal">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Gemeente</div>
+        <div class="client-value" id="cr-billing-city">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Landcode</div>
+        <div class="client-value" id="cr-billing-country">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rij 3 -->
+  <div class="client-grid" style="margin-top: 18px;">
     <div class="client-block">
       <h2 class="client-block-title">Leveringsadres</h2>
 
@@ -122,8 +157,27 @@
       </div>
 
       <div class="client-row">
+        <div class="client-label">Landcode</div>
+        <div class="client-value" id="cr-delivery-country">–</div>
+      </div>
+
+      <div class="client-row">
         <div class="client-label">Opmerking</div>
         <div class="client-value" id="cr-delivery-note">–</div>
+      </div>
+    </div>
+
+    <div class="client-block">
+      <h2 class="client-block-title">Samengestelde adressen</h2>
+
+      <div class="client-row">
+        <div class="client-label">Zetel (samenvatting)</div>
+        <div class="client-value" id="cr-registered-address">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Facturatie (samenvatting)</div>
+        <div class="client-value" id="cr-billing-address">–</div>
       </div>
     </div>
   </div>
@@ -157,6 +211,14 @@
     return s;
   }
 
+  function coalesce(...vals) {
+    for (const v of vals) {
+      const s = norm(v);
+      if (s) return s;
+    }
+    return "";
+  }
+
   function setText(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -183,8 +245,13 @@
     return fetch(url, Object.assign({}, opts, { headers }));
   }
 
-  function isTruthy(v) {
-    return v === true || v === "true" || v === 1 || v === "1";
+  function hasAnyDeliveryAddress(c) {
+    return !!(
+      norm(c.delivery_street) ||
+      norm(c.delivery_box) ||
+      norm(c.delivery_postal_code) ||
+      norm(c.delivery_city)
+    );
   }
 
   async function hydrate() {
@@ -195,38 +262,7 @@
 
       const c = data.company || {};
 
-      // Basis
-      setText("cr-company-name", c.name || c.company_name);
-      setText("cr-enterprise-number", c.vat_number); // inhoud = ondernemingsnummer
-      setText("cr-customer-number", c.customer_number);
-      setText("cr-website", c.website);
-
-      // Contact & facturatie (gebruik echte kolommen)
-      setText("cr-registered-contact", c.registered_contact_person);
-      setText("cr-billing-email", c.billing_email);
-      setText("cr-billing-ref", c.billing_reference);
-      setText("cr-delivery-contact", c.delivery_contact_person);
-
-      // Zetel adres
-      setText("cr-registered-street", c.registered_street);
-      setText("cr-registered-box", c.registered_box);
-      setText("cr-registered-postal", c.registered_postal_code);
-      setText("cr-registered-city", c.registered_city);
-
-      // Levering: als niets ingevuld is, toon zetel (want delivery_is_different = false)
-      const deliveryIsDifferent = isTruthy(c.delivery_is_different);
-      const dStreet = deliveryIsDifferent ? c.delivery_street : (c.delivery_street || c.registered_street);
-      const dBox    = deliveryIsDifferent ? c.delivery_box : (c.delivery_box || c.registered_box);
-      const dPostal = deliveryIsDifferent ? c.delivery_postal_code : (c.delivery_postal_code || c.registered_postal_code);
-      const dCity   = deliveryIsDifferent ? c.delivery_city : (c.delivery_city || c.registered_city);
-
-      setText("cr-delivery-street", dStreet);
-      setText("cr-delivery-box", dBox);
-      setText("cr-delivery-postal", dPostal);
-      setText("cr-delivery-city", dCity);
-      setText("cr-delivery-note", deliveryIsDifferent ? "Afwijkend leveringsadres" : "Gelijk aan maatschappelijke zetel");
-
-      // Meta: alleen source-of-truth
+      // Meta (source of truth)
       const metaEl = document.getElementById("client-status-meta");
       if (metaEl) {
         const created = formatDateTimeISO(c.created_at);
@@ -235,6 +271,59 @@
           `Account aangemaakt: <strong>${escapeHtml(created)}</strong><br>` +
           `Klantnummer: <strong>${escapeHtml(custNo)}</strong>`;
       }
+
+      // Basis
+      setText("cr-name", coalesce(c.name, c.company_name));
+      setText("cr-vat-number", c.vat_number); // inhoud = ondernemingsnummer
+      setText("cr-customer-number", c.customer_number);
+      setText("cr-website", c.website);
+
+      // Contact/facturatie
+      const regContact = coalesce(c.registered_contact_person);
+      const delContact = coalesce(c.delivery_contact_person, regContact); // ✅ fallback
+      setText("cr-registered-contact", regContact);
+      setText("cr-billing-email", c.billing_email);
+      setText("cr-billing-reference", c.billing_reference);
+      setText("cr-delivery-contact", delContact);
+
+      // Zetel adres
+      setText("cr-registered-street", c.registered_street);
+      setText("cr-registered-box", c.registered_box);
+      setText("cr-registered-postal", c.registered_postal_code);
+      setText("cr-registered-city", c.registered_city);
+      setText("cr-registered-country", c.registered_country_code);
+
+      // Facturatie adres (exacte DB kolommen)
+      setText("cr-billing-street", c.billing_street);
+      setText("cr-billing-box", c.billing_box);
+      setText("cr-billing-postal", c.billing_postal_code);
+      setText("cr-billing-city", c.billing_city);
+      setText("cr-billing-country", c.billing_country_code);
+
+      // Levering: als NULL -> fallback naar zetel
+      const dStreet  = coalesce(c.delivery_street, c.registered_street);
+      const dBox     = coalesce(c.delivery_box, c.registered_box);
+      const dPostal  = coalesce(c.delivery_postal_code, c.registered_postal_code);
+      const dCity    = coalesce(c.delivery_city, c.registered_city);
+
+      setText("cr-delivery-street", dStreet);
+      setText("cr-delivery-box", dBox);
+      setText("cr-delivery-postal", dPostal);
+      setText("cr-delivery-city", dCity);
+
+      // Country voor levering: gebruik de bestaande registered_country_code (België-only)
+      setText("cr-delivery-country", coalesce(c.registered_country_code));
+
+      // Opmerking: bepaal “afwijkend” zonder delivery_is_different kolom
+      setText(
+        "cr-delivery-note",
+        hasAnyDeliveryAddress(c) ? "Afwijkend leveringsadres" : "Leveringsadres = maatschappelijke zetel"
+      );
+
+      // Samengestelde adressen (bestaan in jouw tabel)
+      setText("cr-registered-address", c.registered_address);
+      setText("cr-billing-address", c.billing_address);
+
     } catch (e) {
       console.warn(e);
     }
@@ -243,3 +332,4 @@
   hydrate();
 })();
 </script>
+
