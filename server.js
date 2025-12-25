@@ -1,3 +1,7 @@
+// server.js (hardened)
+
+'use strict';
+
 const express = require('express');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -5,7 +9,6 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { pool } = require('./db/db');
 
-leading = true;
 const app = express();
 const PORT = process.env.PORT || 3000;
 const rootDir = __dirname;
@@ -14,19 +17,6 @@ const rootDir = __dirname;
 // Middleware
 // =========================================================
 app.use(express.json());
-
-app.use((req, res, next) => {
-  if (!req.path.endsWith('.html')) return next();
-
-  if (req.path.startsWith('/views/')) return next();
-  if (req.path === '/index.html') return next();
-  if (req.path === '/login.html') return next();
-  if (req.path === '/signup.html') return next();
-  if (req.path === '/punch.html') return next();
-
-  // default fallback: allow
-  return next();
-});
 
 app.use(express.static(path.join(rootDir, 'public')));
 
@@ -93,6 +83,14 @@ function makeCompanyCode(companyName) {
   return `${base || 'COMP'}-${suffix}`;
 }
 
+function ensureDbOr500(res) {
+  if (!pool) {
+    res.status(500).json({ ok: false, error: 'Database not configured (DATABASE_URL missing).' });
+    return false;
+  }
+  return true;
+}
+
 async function getAuthUser(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
@@ -117,6 +115,8 @@ async function getAuthUser(req) {
 function requireAuth(role = null) {
   return async (req, res, next) => {
     try {
+      if (!ensureDbOr500(res)) return;
+
       const user = await getAuthUser(req);
       if (!user) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
@@ -147,6 +147,8 @@ app.get('/app', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.h
 // =========================================================
 app.post('/api/login', async (req, res) => {
   try {
+    if (!ensureDbOr500(res)) return;
+
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
@@ -171,6 +173,7 @@ app.post('/api/login', async (req, res) => {
 
     const token = genToken(24);
 
+    // We keep updated_at for client_portal_users (separate from companies.updated_at which you removed)
     await pool.query(
       `UPDATE client_portal_users
        SET auth_token = $1, updated_at = NOW()
@@ -215,6 +218,8 @@ app.get('/api/me', requireAuth(), async (req, res) => {
 
 app.post('/api/signup/step1', async (req, res) => {
   try {
+    if (!ensureDbOr500(res)) return;
+
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
@@ -232,6 +237,7 @@ app.post('/api/signup/step1', async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
     const signup_token = uuidv4();
 
+    // OK to store draft timestamps; this is not your "account created" truth
     await pool.query(
       `INSERT INTO signup_drafts (signup_token, email, password_hash, created_at, updated_at)
        VALUES ($1,$2,$3,NOW(),NOW())`,
@@ -247,6 +253,8 @@ app.post('/api/signup/step1', async (req, res) => {
 
 app.post('/api/signup/step2', async (req, res) => {
   try {
+    if (!ensureDbOr500(res)) return;
+
     const signup_token = String(req.body.signup_token || '').trim();
     if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
 
@@ -260,7 +268,6 @@ app.post('/api/signup/step2', async (req, res) => {
     const company_name = safeText(payload.company_name);
     const country_code = safeText(payload.country_code) || 'BE';
     const vat_number = normalizeVatNumber(country_code, payload.vat_number);
-
     const website = safeText(payload.website);
 
     const registered_contact_person = safeText(payload.registered_contact_person);
@@ -298,6 +305,7 @@ app.post('/api/signup/step2', async (req, res) => {
       registered_country_code
     );
 
+    // Billing address = delivery address if different, else registered
     const billing_address = buildAddressLineFromFields(
       deliveryDifferent ? (delivery_street || registered_street) : registered_street,
       deliveryDifferent ? (delivery_box || registered_box) : registered_box,
@@ -373,6 +381,8 @@ app.post('/api/signup/step2', async (req, res) => {
 });
 
 app.post('/api/signup/step3', async (req, res) => {
+  if (!ensureDbOr500(res)) return;
+
   const client = await pool.connect();
   try {
     const signup_token = String(req.body.signup_token || '').trim();
@@ -383,7 +393,7 @@ app.post('/api/signup/step3', async (req, res) => {
 
     const draft = rows[0];
 
-    // Validate that step2 completed
+    // Validate step2 completed
     if (!draft.company_name || !draft.vat_number || !draft.registered_contact_person || !draft.billing_email) {
       return res.status(400).json({ ok: false, error: 'Signup draft incomplete. Please complete step 2.' });
     }
@@ -424,13 +434,16 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('BEGIN');
 
+    // 1) Create company
+    // IMPORTANT:
+    // - DO NOT insert created_at: DB default is source of truth
+    // - DO NOT insert customer_number: DB default nextval(...) is source of truth
+    // - companies.updated_at is removed in your DB, so we NEVER reference it
     const companyCode = makeCompanyCode(companyName);
-    const customerNumber = companyCode; // ✅ FIX: auto-generate customer number
 
     const companyIns = await client.query(
       `INSERT INTO companies (
          company_code,
-         customer_number,
          name,
          vat_number,
          registered_address,
@@ -438,8 +451,6 @@ app.post('/api/signup/step3', async (req, res) => {
          billing_email,
          billing_reference,
          estimated_user_count,
-         created_at,
-         updated_at,
          registered_contact_person,
          delivery_contact_person,
          website,
@@ -452,17 +463,22 @@ app.post('/api/signup/step3', async (req, res) => {
          billing_box,
          billing_postal_code,
          billing_city,
-         billing_country_code
+         billing_country_code,
+         delivery_street,
+         delivery_box,
+         delivery_postal_code,
+         delivery_city,
+         delivery_country_code
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW(),
-         $10,$11,$12,
-         $13,$14,$15,$16,$17,
-         $18,$19,$20,$21,$22
+         $1,$2,$3,$4,$5,$6,$7,$8,
+         $9,$10,$11,
+         $12,$13,$14,$15,$16,
+         $17,$18,$19,$20,$21,
+         $22,$23,$24,$25,$26
        )
-       RETURNING id`,
+       RETURNING id, created_at, customer_number`,
       [
         companyCode,
-        customerNumber,
         companyName,
         vatNumber || null,
         registeredAddress || null,
@@ -471,7 +487,7 @@ app.post('/api/signup/step3', async (req, res) => {
         billingReference || null,
         0,
         regContact || null,
-        (deliveryDifferent ? delContact : '') || null,
+        (deliveryDifferent ? delContact : null) || null,
         website || null,
         regStreet || null,
         regBox || null,
@@ -482,25 +498,40 @@ app.post('/api/signup/step3', async (req, res) => {
         billingBox || null,
         billingPostal || null,
         billingCity || null,
-        billingCountry || null
+        billingCountry || null,
+        deliveryDifferent ? (delStreet || null) : null,
+        deliveryDifferent ? (delBox || null) : null,
+        deliveryDifferent ? (delPostal || null) : null,
+        deliveryDifferent ? (delCity || null) : null,
+        deliveryDifferent ? (delCountry || null) : null
       ]
     );
 
-    const companyId = companyIns.rows[0].id;
+    const companyRow = companyIns.rows[0];
+    const companyId = companyRow.id;
 
-    // ✅ FIX: do NOT insert UUID into an integer id column.
-    // Let Postgres create the integer id automatically.
+    // 2) Create admin user
+    // (client_portal_users can keep its own updated_at)
     await client.query(
       `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id, created_at, updated_at)
        VALUES ($1,$2,'admin',true,$3,NOW(),NOW())`,
       [draft.email, draft.password_hash, companyId]
     );
 
+    // 3) Cleanup draft
     await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signup_token]);
 
     await client.query('COMMIT');
 
-    return res.json({ ok: true });
+    // Return values (handig voor debug; frontend mag dit negeren)
+    return res.json({
+      ok: true,
+      company: {
+        id: companyRow.id,
+        created_at: companyRow.created_at,
+        customer_number: companyRow.customer_number
+      }
+    });
   } catch (e) {
     try {
       await client.query('ROLLBACK');
@@ -538,13 +569,10 @@ app.get('/api/company', requireAuth(), async (req, res) => {
       buildAddress(c.delivery_street, c.delivery_box, c.delivery_postal_code, c.delivery_city, c.delivery_country_code) ||
       null;
 
-    // ✅ FIX: fallback to registered address if delivery is empty
     const deliveryAddress = rawDeliveryAddress || registeredAddress || null;
 
-    // UI hard-coded mapping (client-record page)
     const company = {
       ...c,
-
       company_name: c.name,
       main_contact: c.registered_contact_person || null,
       invoices_sent_to: c.billing_email || null,
@@ -553,275 +581,13 @@ app.get('/api/company', requireAuth(), async (req, res) => {
       registered_address: registeredAddress,
       delivery_address: deliveryAddress,
 
-      customer_number: c.customer_number || null,
+      // explicitly keep these stable for frontend
+      customer_number: c.customer_number ?? null,
+      created_at: c.created_at ?? null,
       billing_reference: c.billing_reference || null
     };
 
     return res.json({ ok: true, company });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-// =========================================================
-// Stats
-// =========================================================
-app.get('/api/stats', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-
-    const employeesTotalQ = await pool.query(`SELECT COUNT(*)::int AS n FROM employees WHERE company_id = $1`, [companyId]);
-    const employeesActiveQ = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM employees WHERE company_id = $1 AND lower(status) = 'active'`,
-      [companyId]
-    );
-
-    const todayQ = await pool.query(
-      `SELECT COUNT(*)::int AS n
-       FROM raw_data
-       WHERE company_id = $1 AND created_at::date = NOW()::date`,
-      [companyId]
-    );
-
-    return res.json({
-      ok: true,
-      stats: {
-        employeesTotal: employeesTotalQ.rows[0]?.n ?? 0,
-        employeesActive: employeesActiveQ.rows[0]?.n ?? 0,
-        checkinsToday: todayQ.rows[0]?.n ?? 0
-      }
-    });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-// =========================================================
-// Employees CRUD
-// =========================================================
-app.get('/api/employees', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-
-    const { rows } = await pool.query(
-      `SELECT
-         e.*,
-         EXISTS (SELECT 1 FROM raw_data rd WHERE rd.employee_id = e.id LIMIT 1) AS has_punches,
-         EXISTS (SELECT 1 FROM employee_expected_schedule s WHERE s.employee_id = e.id AND (s.expected_minutes > 0 OR s.break_minutes > 0) LIMIT 1) AS has_working_schedule
-       FROM employees e
-       WHERE e.company_id = $1
-       ORDER BY e.created_at DESC`,
-      [companyId]
-    );
-
-    return res.json({ ok: true, employees: rows });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-app.post('/api/employees', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-
-    const first_name = safeText(req.body.first_name);
-    const last_name = safeText(req.body.last_name);
-
-    if (!first_name || !last_name) {
-      return res.status(400).json({ ok: false, error: 'Please fill in FIRST NAME and LAST NAME.' });
-    }
-
-    // auto-generate employee_code
-    const code = `${String(first_name).slice(0, 1)}${String(last_name).slice(0, 1)}-${Math.floor(1000 + Math.random() * 9000)}`.toUpperCase();
-
-    const { rows } = await pool.query(
-      `INSERT INTO employees (company_id, employee_code, first_name, last_name, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,'active',NOW(),NOW())
-       RETURNING *`,
-      [companyId, code, first_name.toUpperCase(), last_name.toUpperCase()]
-    );
-
-    return res.json({ ok: true, employee: rows[0] });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-app.patch('/api/employees/:id/status', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-    const id = Number(req.params.id);
-    const status = safeText(req.body.status);
-
-    if (!id) return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-    if (!status || !['active', 'inactive'].includes(status.toLowerCase())) {
-      return res.status(400).json({ ok: false, error: 'Invalid status.' });
-    }
-
-    const { rows } = await pool.query(
-      `UPDATE employees
-       SET status = $1, updated_at = NOW()
-       WHERE id = $2 AND company_id = $3
-       RETURNING *`,
-      [status.toLowerCase(), id, companyId]
-    );
-
-    if (!rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
-
-    return res.json({ ok: true, employee: rows[0] });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-app.delete('/api/employees/:id', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-    const id = Number(req.params.id);
-
-    if (!id) return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-
-    const hasPunches = await pool.query(`SELECT 1 FROM raw_data WHERE employee_id = $1 LIMIT 1`, [id]);
-    if (hasPunches.rows.length) {
-      return res.status(400).json({ ok: false, error: 'Cannot delete: raw data present for this employee.' });
-    }
-
-    const r = await pool.query(`DELETE FROM employees WHERE id = $1 AND company_id = $2`, [id, companyId]);
-    if (r.rowCount === 0) return res.status(404).json({ ok: false, error: 'Employee not found.' });
-
-    return res.status(204).send();
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-// =========================================================
-// Expected schedule
-// =========================================================
-app.get('/api/employees/:id/expected-schedule', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-    const employeeId = Number(req.params.id);
-    if (!employeeId) return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-
-    const okEmp = await pool.query(`SELECT 1 FROM employees WHERE id = $1 AND company_id = $2 LIMIT 1`, [employeeId, companyId]);
-    if (!okEmp.rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
-
-    const { rows } = await pool.query(
-      `SELECT weekday, expected_minutes, break_minutes
-       FROM employee_expected_schedule
-       WHERE employee_id = $1
-       ORDER BY weekday ASC`,
-      [employeeId]
-    );
-
-    return res.json({ ok: true, schedule: rows });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-app.put('/api/employees/:id/expected-schedule', requireAuth(), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const companyId = req.user.company_id;
-    const employeeId = Number(req.params.id);
-    if (!employeeId) return res.status(400).json({ ok: false, error: 'Invalid employee id.' });
-
-    const okEmp = await client.query(`SELECT 1 FROM employees WHERE id = $1 AND company_id = $2 LIMIT 1`, [employeeId, companyId]);
-    if (!okEmp.rows.length) return res.status(404).json({ ok: false, error: 'Employee not found.' });
-
-    const schedule = Array.isArray(req.body.schedule) ? req.body.schedule : [];
-    await client.query('BEGIN');
-
-    await client.query(`DELETE FROM employee_expected_schedule WHERE employee_id = $1`, [employeeId]);
-
-    for (const row of schedule) {
-      const weekday = Number(row.weekday);
-      const expected_minutes = Number(row.expected_minutes || 0);
-      const break_minutes = Number(row.break_minutes || 0);
-
-      if (!Number.isFinite(weekday)) continue;
-      if (weekday < 0 || weekday > 6) continue;
-
-      if (!Number.isFinite(expected_minutes) || expected_minutes < 0) continue;
-      if (!Number.isFinite(break_minutes) || break_minutes < 0) continue;
-
-      await client.query(
-        `INSERT INTO employee_expected_schedule (employee_id, weekday, expected_minutes, break_minutes)
-         VALUES ($1,$2,$3,$4)`,
-        [employeeId, weekday, expected_minutes, break_minutes]
-      );
-    }
-
-    await client.query('COMMIT');
-
-    const { rows } = await client.query(
-      `SELECT weekday, expected_minutes, break_minutes
-       FROM employee_expected_schedule
-       WHERE employee_id = $1
-       ORDER BY weekday ASC`,
-      [employeeId]
-    );
-
-    return res.json({ ok: true, schedule: rows });
-  } catch (e) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  } finally {
-    client.release();
-  }
-});
-
-// =========================================================
-// Devices (linked devices)
-// =========================================================
-app.get('/api/devices', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-
-    const { rows } = await pool.query(
-      `SELECT
-         d.device_id,
-         d.employee_id,
-         d.last_seen_at,
-         e.employee_code,
-         e.first_name,
-         e.last_name
-       FROM device_links d
-       JOIN employees e ON e.id = d.employee_id
-       WHERE d.company_id = $1
-       ORDER BY d.last_seen_at DESC NULLS LAST`,
-      [companyId]
-    );
-
-    return res.json({ ok: true, devices: rows });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
-  }
-});
-
-app.delete('/api/devices/:deviceId', requireAuth(), async (req, res) => {
-  try {
-    const companyId = req.user.company_id;
-    const deviceId = String(req.params.deviceId || '').trim();
-    if (!deviceId) return res.status(400).json({ ok: false, error: 'Invalid device id.' });
-
-    const r = await pool.query(`DELETE FROM device_links WHERE company_id = $1 AND device_id = $2`, [companyId, deviceId]);
-    if (r.rowCount === 0) return res.status(404).json({ ok: false, error: 'Device link not found.' });
-
-    return res.json({ ok: true });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ ok: false, error: 'Server error.' });
