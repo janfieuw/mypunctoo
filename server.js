@@ -148,6 +148,9 @@ app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html
 app.get('/login', (req, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
 app.get('/signup', (req, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
 
+// ✅ compat: als ergens nog /app gebruikt wordt, stuur naar dashboard
+app.get('/app', (req, res) => res.redirect('/'));
+
 // ---------------- auth helpers ----------------
 async function getAuthUser(req) {
   const auth = req.headers.authorization || '';
@@ -182,6 +185,34 @@ function requireAuth(role = null) {
   };
 }
 
+// ✅ app.js verwacht /api/me om sessie te valideren
+app.get('/api/me', requireAuth(), async (req, res) => {
+  return res.json({
+    ok: true,
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      company_id: req.user.company_id
+    }
+  });
+});
+
+// ✅ app.js verwacht /api/logout
+app.post('/api/logout', requireAuth(), async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE client_portal_users
+       SET auth_token = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [req.user.id]
+    );
+  } catch (e) {
+    console.warn('logout update failed:', e?.message || e);
+  }
+  return res.json({ ok: true });
+});
+
 // ---------------- login ----------------
 app.post('/api/login', async (req, res) => {
   try {
@@ -214,7 +245,8 @@ app.post('/api/login', async (req, res) => {
       [token, user.id]
     );
 
-    return res.json({ ok: true, token });
+    // redirectUrl is optioneel; login.js gebruikt default "/"
+    return res.json({ ok: true, token, redirectUrl: '/' });
   } catch (e) {
     return errorResponse(res, e);
   }
@@ -437,9 +469,6 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('BEGIN');
 
-    // ✅ DB = source of truth:
-    // - companies.created_at DEFAULT now()
-    // - companies.customer_number DEFAULT nextval('customer_number_seq')
     const companyCode = makeCompanyCode(companyName);
 
     const companyIns = await client.query(

@@ -15,63 +15,67 @@
     statusEl.classList.toggle("status--ok", !isError && !!message);
   }
 
-  function setLoading(isLoading) {
-    if (!loginButton) return;
-    loginButton.disabled = isLoading;
-    loginButton.textContent = isLoading ? "Logging in..." : "Log in";
+  function setLoading(loading) {
+    if (loginButton) {
+      loginButton.disabled = !!loading;
+      loginButton.classList.toggle("btn--loading", !!loading);
+    }
   }
 
-  async function callLogin(email, password) {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || data.ok === false) {
-      throw new Error(data.error || "Login failed.");
-    }
-
-    return data;
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
   }
 
   async function doLogin(e) {
     if (e) e.preventDefault();
 
-    const email = (emailInput?.value || "").trim();
-    const password = passwordInput?.value || "";
+    const email = String(emailInput?.value || "").trim().toLowerCase();
+    const password = String(passwordInput?.value || "");
+
+    setStatus("");
 
     if (!email || !password) {
-      setStatus("Vul je e-mail en wachtwoord in.", true);
+      setStatus("Vul e-mail en wachtwoord in.", true);
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setStatus("Ongeldig e-mailadres.", true);
       return;
     }
 
-    setStatus("");
     setLoading(true);
+    setStatus("Aanmelden...");
 
     try {
-      const data = await callLogin(email, password);
+      const r = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
 
-      if (!data.token) {
-        setStatus("Server gaf geen token terug.", true);
+      const data = await r.json().catch(() => ({}));
+
+      if (!r.ok || !data.ok) {
+        setStatus(data.error || "Aanmelden mislukt.", true);
         return;
       }
 
+      if (!data.token) {
+        setStatus("Interne fout: token ontbreekt.", true);
+        return;
+      }
+
+      // ✅ token opslaan zoals app.js verwacht
       window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
 
-      // ✅ naar mooie route
-      window.location.href = data.redirectUrl || "/app";
+      // ✅ dashboard = "/" (index.html), NIET "/app"
+      window.location.href = data.redirectUrl || "/";
     } catch (err) {
-      setStatus(err?.message || "Login failed.", true);
+      setStatus("Netwerkfout tijdens aanmelden.", true);
     } finally {
       setLoading(false);
     }
   }
-
-  // Bewijs dat JS actief is
-  setStatus("JS loaded. Ready.", false);
 
   if (form) form.addEventListener("submit", doLogin);
   if (loginButton) loginButton.addEventListener("click", doLogin);
