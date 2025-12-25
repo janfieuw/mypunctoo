@@ -1,168 +1,135 @@
 <section class="card">
-  <div class="client-header-row">
-    <div>
-      <h1 class="card-title">Klantfiche</h1>
-      <p class="card-text">
-        Dit is de officiële klantfiche van je bedrijf in <strong>MyPunctoo</strong>.
-        Deze gegevens worden gebruikt voor <strong>abonnement</strong> en <strong>facturen</strong> en zijn niet rechtstreeks aanpasbaar in het portaal.
-      </p>
-    </div>
+  <style>
+    /* Client record panels (lokale styling, zonder bestaande css te breken) */
+    .cr-wrap {
+      display: grid;
+      gap: 18px;
+    }
 
-    <div class="client-status">
-      <span class="client-status-label">Status</span>
-      <span class="client-status-badge client-status-badge--active" id="client-status-badge">Actief</span>
+    .cr-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
 
-      <div class="client-status-meta" id="client-status-meta">
-        Account aangemaakt: <strong>–</strong><br>
-        Klantnummer: <strong>–</strong>
-      </div>
-    </div>
-  </div>
+    @media (max-width: 980px) {
+      .cr-row-2 {
+        grid-template-columns: 1fr;
+      }
+    }
 
-  <!-- Rij 1 -->
-  <div class="client-grid">
-    <div class="client-block">
-      <h2 class="client-block-title">Basisgegevens</h2>
+    .cr-panel {
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #f2f3f5 100%);
+      padding: 18px 20px;
+    }
 
-      <div class="client-row">
-        <div class="client-label">Bedrijfsnaam</div>
-        <div class="client-value" id="cr-name">–</div>
-      </div>
+    .cr-panel--compact {
+      padding: 16px 18px;
+    }
 
-      <div class="client-row">
-        <div class="client-label">Ondernemingsnummer</div>
-        <div class="client-value" id="cr-vat-number">–</div>
-      </div>
+    .cr-panel-title {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 0 0 10px 0;
+      text-transform: uppercase;
+      font-size: 13px;
+    }
 
-      <div class="client-row">
-        <div class="client-label">Klantnummer</div>
-        <div class="client-value" id="cr-customer-number">–</div>
-      </div>
-    </div>
+    .cr-kv {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      row-gap: 8px;
+      column-gap: 18px;
+      align-items: start;
+      font-size: 13px;
+    }
 
-    <div class="client-block">
-      <h2 class="client-block-title">Contact & facturatie</h2>
+    @media (max-width: 520px) {
+      .cr-kv {
+        grid-template-columns: 1fr;
+      }
+      .cr-k {
+        opacity: 0.9;
+      }
+    }
 
-      <div class="client-row">
-        <div class="client-label">Contactpersoon (zetel)</div>
-        <div class="client-value" id="cr-registered-contact">–</div>
-      </div>
+    .cr-k {
+      opacity: 0.85;
+      white-space: nowrap;
+    }
 
-      <div class="client-row">
-        <div class="client-label">Facturatie e-mail</div>
-        <div class="client-value" id="cr-billing-email">–</div>
-      </div>
+    .cr-v {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
 
-      <div class="client-row">
-        <div class="client-label">Referentie / PO</div>
-        <div class="client-value" id="cr-billing-reference">–</div>
-      </div>
+  <div class="cr-wrap">
+    <!-- Bovenste rij: klantnummer/created + emails -->
+    <div class="cr-row-2">
+      <div class="cr-panel cr-panel--compact">
+        <div class="cr-kv">
+          <div class="cr-k">Klantnummer</div>
+          <div class="cr-v" id="cr-customer-number">–</div>
 
-      <div class="client-row">
-        <div class="client-label">Leveringscontact</div>
-        <div class="client-value" id="cr-delivery-contact">–</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Rij 2 -->
-  <div class="client-grid" style="margin-top: 18px;">
-    <div class="client-block">
-      <h2 class="client-block-title">Maatschappelijke zetel</h2>
-
-      <div class="client-row">
-        <div class="client-label">Straat + nummer</div>
-        <div class="client-value" id="cr-registered-street">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Bus</div>
-        <div class="client-value" id="cr-registered-box">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Postcode</div>
-        <div class="client-value" id="cr-registered-postal">–</div>
+          <div class="cr-k">Account aangemaakt</div>
+          <div class="cr-v" id="cr-created-at">–</div>
+        </div>
       </div>
 
-      <div class="client-row">
-        <div class="client-label">Gemeente</div>
-        <div class="client-value" id="cr-registered-city">–</div>
-      </div>
-    </div>
+      <div class="cr-panel cr-panel--compact">
+        <div class="cr-kv">
+          <div class="cr-k">Contact e-mail</div>
+          <div class="cr-v" id="cr-contact-email">–</div>
 
-    <div class="client-block">
-      <h2 class="client-block-title">Samenvatting (DB)</h2>
-
-      <div class="client-row">
-        <div class="client-label">Zetel (registered_address)</div>
-        <div class="client-value" id="cr-registered-address">–</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Rij 3 -->
-  <div class="client-grid" style="margin-top: 18px;">
-    <div class="client-block">
-      <h2 class="client-block-title">Leveringsadres</h2>
-
-      <div class="client-row">
-        <div class="client-label">Straat + nummer</div>
-        <div class="client-value" id="cr-delivery-street">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Bus</div>
-        <div class="client-value" id="cr-delivery-box">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Postcode</div>
-        <div class="client-value" id="cr-delivery-postal">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Gemeente</div>
-        <div class="client-value" id="cr-delivery-city">–</div>
-      </div>
-
-      <div class="client-row">
-        <div class="client-label">Opmerking</div>
-        <div class="client-value" id="cr-delivery-note">–</div>
-      </div>
-    </div>
-
-    <div class="client-block">
-      <h2 class="client-block-title">Abonnement</h2>
-
-      <div class="sub-toggle">
-        <div class="sub-toggle-label">Subscription</div>
-        <button id="subscription-toggle" class="sub-toggle-switch sub-toggle-switch--on" type="button" aria-pressed="true">
-          <span class="sub-toggle-knob"></span>
-        </button>
-      </div>
-
-      <!-- modal (zoals je had) -->
-      <div id="deactivate-modal" class="modal" aria-hidden="true">
-        <div class="modal-backdrop"></div>
-        <div class="modal-card">
-          <h3 class="modal-title">Subscription deactiveren?</h3>
-          <p class="modal-text">Dit is een UI-schakelaar (demo). In de echte flow gebeurt dit via support.</p>
-          <div class="modal-actions">
-            <button id="cancel-deactivate" class="btn-secondary" type="button">Annuleren</button>
-            <button id="confirm-deactivate" class="btn-primary" type="button">Bevestigen</button>
-          </div>
+          <div class="cr-k">Facturatie e-mail</div>
+          <div class="cr-v" id="cr-billing-email">–</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="client-contact">
-    <p class="client-contact-text">
-      Wijziging nodig? Neem contact op met support.
-    </p>
-    <a class="client-contact-btn" href="mailto:support@mypunctoo.com">
-      Wijziging aanvragen
-    </a>
+    <!-- Onderste rij: facturatie + levering -->
+    <div class="cr-row-2">
+      <div class="cr-panel">
+        <h3 class="cr-panel-title">Facturatie</h3>
+        <div class="cr-kv">
+          <div class="cr-k">Bedrijfsnaam</div>
+          <div class="cr-v" id="cr-name">–</div>
+
+          <div class="cr-k">Ondernemingsnummer</div>
+          <div class="cr-v" id="cr-vat-number">–</div>
+
+          <div class="cr-k">Straat + nummer</div>
+          <div class="cr-v" id="cr-registered-streetline">–</div>
+
+          <div class="cr-k">PC + gemeente</div>
+          <div class="cr-v" id="cr-registered-pccity">–</div>
+
+          <div class="cr-k">Contactpersoon (zetel)</div>
+          <div class="cr-v" id="cr-registered-contact">–</div>
+        </div>
+      </div>
+
+      <div class="cr-panel">
+        <h3 class="cr-panel-title">Levering</h3>
+        <div class="cr-kv">
+          <div class="cr-k">Bedrijfsnaam</div>
+          <div class="cr-v" id="cr-delivery-name">–</div>
+
+          <div class="cr-k">Contactpersoon (levering)</div>
+          <div class="cr-v" id="cr-delivery-contact">–</div>
+
+          <div class="cr-k">Straat + nummer</div>
+          <div class="cr-v" id="cr-delivery-streetline">–</div>
+
+          <div class="cr-k">PC + gemeente</div>
+          <div class="cr-v" id="cr-delivery-pccity">–</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
