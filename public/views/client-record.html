@@ -10,10 +10,9 @@
 
     <div class="client-status">
       <span class="client-status-label">Status</span>
-      <span class="client-status-badge client-status-badge--active" id="client-status-badge">
-        Actief
-      </span>
+      <span class="client-status-badge client-status-badge--active" id="client-status-badge">Actief</span>
 
+      <!-- ✅ alleen nog de 2 “source of truth” velden -->
       <div class="client-status-meta" id="client-status-meta">
         Account aangemaakt: <strong>–</strong><br>
         Klantnummer: <strong>–</strong>
@@ -22,6 +21,7 @@
   </div>
 
   <div class="client-grid">
+    <!-- Basisgegevens -->
     <div class="client-block">
       <h2 class="client-block-title">Basisgegevens</h2>
 
@@ -32,26 +32,32 @@
 
       <div class="client-row">
         <div class="client-label">Ondernemingsnummer</div>
-        <div class="client-value" id="cr-vat">–</div>
+        <div class="client-value" id="cr-enterprise-number">–</div>
       </div>
 
       <div class="client-row">
         <div class="client-label">Klantnummer</div>
         <div class="client-value" id="cr-customer-number">–</div>
       </div>
+
+      <div class="client-row">
+        <div class="client-label">Website</div>
+        <div class="client-value" id="cr-website">–</div>
+      </div>
     </div>
 
+    <!-- Contact & facturatie -->
     <div class="client-block">
       <h2 class="client-block-title">Contact & facturatie</h2>
 
       <div class="client-row">
-        <div class="client-label">Contactpersoon</div>
-        <div class="client-value" id="cr-contact-name">–</div>
+        <div class="client-label">Contactpersoon (zetel)</div>
+        <div class="client-value" id="cr-registered-contact">–</div>
       </div>
 
       <div class="client-row">
-        <div class="client-label">Facturen naar</div>
-        <div class="client-value" id="cr-invoice-email">–</div>
+        <div class="client-label">Facturatie e-mail</div>
+        <div class="client-value" id="cr-billing-email">–</div>
       </div>
 
       <div class="client-row">
@@ -66,6 +72,62 @@
     </div>
   </div>
 
+  <!-- Adressen -->
+  <div class="client-grid" style="margin-top: 18px;">
+    <div class="client-block">
+      <h2 class="client-block-title">Maatschappelijke zetel</h2>
+
+      <div class="client-row">
+        <div class="client-label">Straat + nummer</div>
+        <div class="client-value" id="cr-registered-street">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Bus</div>
+        <div class="client-value" id="cr-registered-box">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Postcode</div>
+        <div class="client-value" id="cr-registered-postal">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Gemeente</div>
+        <div class="client-value" id="cr-registered-city">–</div>
+      </div>
+    </div>
+
+    <div class="client-block">
+      <h2 class="client-block-title">Leveringsadres</h2>
+
+      <div class="client-row">
+        <div class="client-label">Straat + nummer</div>
+        <div class="client-value" id="cr-delivery-street">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Bus</div>
+        <div class="client-value" id="cr-delivery-box">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Postcode</div>
+        <div class="client-value" id="cr-delivery-postal">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Gemeente</div>
+        <div class="client-value" id="cr-delivery-city">–</div>
+      </div>
+
+      <div class="client-row">
+        <div class="client-label">Opmerking</div>
+        <div class="client-value" id="cr-delivery-note">–</div>
+      </div>
+    </div>
+  </div>
+
   <div class="client-contact">
     <p class="client-contact-text">
       Wijziging nodig? Neem contact op met support.
@@ -73,29 +135,6 @@
     <a class="client-contact-btn" href="mailto:support@mypunctoo.com">
       Wijziging aanvragen
     </a>
-  </div>
-
-  <!-- Modal (optioneel: behouden voor compatibiliteit met bestaande UI) -->
-  <div class="modal" id="deactivate-modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
-      <h2 class="modal-title" id="deactivate-title">Abonnement deactiveren?</h2>
-      <p class="modal-text">
-        Als je je abonnement deactiveert, wordt <strong>klokken onmiddellijk uitgeschakeld</strong>.
-        Je account en historische data blijven beschikbaar in alleen-lezen modus.
-      </p>
-      <p class="modal-text">
-        Je kan op elk moment opnieuw activeren vanuit dit scherm.
-      </p>
-      <div class="modal-actions">
-        <button type="button" class="modal-btn modal-btn--secondary" id="cancel-deactivate">
-          Annuleren
-        </button>
-        <button type="button" class="modal-btn modal-btn--danger" id="confirm-deactivate">
-          Ja, deactiveer
-        </button>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -112,11 +151,17 @@
       .replace(/'/g, "&#039;");
   }
 
+  function norm(v) {
+    if (v === null || v === undefined) return "";
+    const s = String(v).trim();
+    return s;
+  }
+
   function setText(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
-    const v = value === null || value === undefined || String(value).trim() === "" ? "–" : String(value);
-    el.textContent = v;
+    const v = norm(value);
+    el.textContent = v ? v : "–";
   }
 
   function formatDateTimeISO(v) {
@@ -134,9 +179,12 @@
   async function apiFetch(url, opts = {}) {
     const token = window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
     const headers = Object.assign({}, opts.headers || {});
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
     if (token) headers["Authorization"] = `Bearer ${token}`;
     return fetch(url, Object.assign({}, opts, { headers }));
+  }
+
+  function isTruthy(v) {
+    return v === true || v === "true" || v === 1 || v === "1";
   }
 
   async function hydrate() {
@@ -147,15 +195,38 @@
 
       const c = data.company || {};
 
-      setText("cr-company-name", c.company_name || c.name);
-      setText("cr-vat", c.vat_number); // inhoud = ondernemingsnummer
+      // Basis
+      setText("cr-company-name", c.name || c.company_name);
+      setText("cr-enterprise-number", c.vat_number); // inhoud = ondernemingsnummer
       setText("cr-customer-number", c.customer_number);
+      setText("cr-website", c.website);
 
-      setText("cr-contact-name", c.main_contact || c.registered_contact_person);
-      setText("cr-invoice-email", c.invoices_sent_to || c.billing_email);
+      // Contact & facturatie (gebruik echte kolommen)
+      setText("cr-registered-contact", c.registered_contact_person);
+      setText("cr-billing-email", c.billing_email);
       setText("cr-billing-ref", c.billing_reference);
-      setText("cr-delivery-contact", c.delivery_contact || c.delivery_contact_person);
+      setText("cr-delivery-contact", c.delivery_contact_person);
 
+      // Zetel adres
+      setText("cr-registered-street", c.registered_street);
+      setText("cr-registered-box", c.registered_box);
+      setText("cr-registered-postal", c.registered_postal_code);
+      setText("cr-registered-city", c.registered_city);
+
+      // Levering: als niets ingevuld is, toon zetel (want delivery_is_different = false)
+      const deliveryIsDifferent = isTruthy(c.delivery_is_different);
+      const dStreet = deliveryIsDifferent ? c.delivery_street : (c.delivery_street || c.registered_street);
+      const dBox    = deliveryIsDifferent ? c.delivery_box : (c.delivery_box || c.registered_box);
+      const dPostal = deliveryIsDifferent ? c.delivery_postal_code : (c.delivery_postal_code || c.registered_postal_code);
+      const dCity   = deliveryIsDifferent ? c.delivery_city : (c.delivery_city || c.registered_city);
+
+      setText("cr-delivery-street", dStreet);
+      setText("cr-delivery-box", dBox);
+      setText("cr-delivery-postal", dPostal);
+      setText("cr-delivery-city", dCity);
+      setText("cr-delivery-note", deliveryIsDifferent ? "Afwijkend leveringsadres" : "Gelijk aan maatschappelijke zetel");
+
+      // Meta: alleen source-of-truth
       const metaEl = document.getElementById("client-status-meta");
       if (metaEl) {
         const created = formatDateTimeISO(c.created_at);
