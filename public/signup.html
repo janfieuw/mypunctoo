@@ -1,806 +1,476 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MyPunctoo | Signup</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="/css/auth.css">
+  <!-- Keep your existing styling assets -->
+  <link rel="stylesheet" href="/css/auth.css" />
 </head>
-
 <body>
-<div class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-main">
 
-      <div class="brand-row">
-        <a href="/" class="brand">
-          <img src="/assets/mypunctoo_logo_opwit.png" alt="MyPunctoo logo" class="brand-logo">
-        </a>
-        <div class="auth-switch">
-          Already have an account?
-          <a href="/login">Sign in</a>
-        </div>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>Signup</h1>
+        <p>Create your company account.</p>
       </div>
 
-      <h2 class="auth-title">Set up your MyPunctoo dashboard</h2>
+      <!-- status + errors -->
+      <div id="statusLine" class="status-line" style="display:none;"></div>
+      <div id="errorLine" class="error-line" style="display:none;"></div>
 
-      <div class="step-indicator">
-        <div class="step-pill step-pill-1 active"><span>1</span> Account</div>
-        <div class="step-divider"></div>
-        <div class="step-pill step-pill-2"><span>2</span> Company details</div>
-        <div class="step-divider"></div>
-        <div class="step-pill step-pill-3"><span>3</span> Confirmation</div>
+      <!-- hidden token across steps -->
+      <input type="hidden" id="signup_token" value="" />
+
+      <!-- STEP NAV -->
+      <div class="stepper">
+        <div class="stepper-item" id="stepDot1"><span>1</span><div>Account</div></div>
+        <div class="stepper-item" id="stepDot2"><span>2</span><div>Company</div></div>
+        <div class="stepper-item" id="stepDot3"><span>3</span><div>Confirm</div></div>
       </div>
 
-      <div id="formError" class="form-error"></div>
-      <div id="formStatus" class="form-status"></div>
+      <!-- STEP 1 -->
+      <section class="step" id="step1">
+        <div class="field">
+          <label>Email *</label>
+          <input id="email" type="email" autocomplete="email" required />
+        </div>
 
-      <form id="signupForm" novalidate>
-        <!-- backend expects snake_case -->
-        <input type="hidden" id="signup_token" />
+        <div class="field">
+          <label>Password *</label>
+          <input id="password" type="password" autocomplete="new-password" required />
+          <div class="help-text help-text-normal">Minimum 8 characters.</div>
+        </div>
 
-        <!-- STEP 1 -->
-        <div id="step-1" class="form-step active">
-          <h3 class="form-section-title">Account</h3>
+        <div class="actions">
+          <button class="btn primary" id="btnStep1Next">Next →</button>
+        </div>
+      </section>
 
-          <div class="field">
-            <label>Work e-mail *</label>
-            <input id="email" type="email" required autocomplete="email">
+      <!-- STEP 2 -->
+      <section class="step" id="step2" style="display:none;">
+        <h2 class="section-title">Company details</h2>
+
+        <div class="field">
+          <label>Company name *</label>
+          <input id="company_name" autocomplete="organization" required />
+        </div>
+
+        <div class="field">
+          <label>Enterprise / VAT number (Belgium) *</label>
+          <div class="prefix-input">
+            <span class="prefix-badge">BE</span>
+            <input id="vat_number" required />
           </div>
-
-          <div class="field-row">
-            <div class="field">
-              <label>Password *</label>
-              <input id="password" type="password" required autocomplete="new-password">
-            </div>
-            <div class="field">
-              <label>Confirm password *</label>
-              <input id="passwordConfirm" type="password" required autocomplete="new-password">
-            </div>
-          </div>
-
-          <div class="help-text">
-            You’ll confirm the order in the last step.
+          <div class="help-text help-text-normal">
+            Format required: <strong>BE 0123. 456. 789</strong>
           </div>
         </div>
 
-        <!-- STEP 2 -->
-        <div id="step-2" class="form-step">
-          <h3 class="form-section-title">Company</h3>
+        <div class="field">
+          <label>Website (optional)</label>
+          <input id="website" />
+        </div>
 
-          <div class="field">
-            <label>Company name *</label>
-            <input id="companyName" required autocomplete="organization">
-          </div>
+        <hr class="divider" />
 
-          <div class="field">
-            <label>Country *</label>
-            <select id="country_code" required autocomplete="country">
-              <option value="">Select country</option>
-              <option value="AT">Austria</option>
-              <option value="BE">Belgium</option>
-              <option value="BG">Bulgaria</option>
-              <option value="HR">Croatia</option>
-              <option value="CY">Cyprus</option>
-              <option value="CZ">Czechia</option>
-              <option value="DK">Denmark</option>
-              <option value="EE">Estonia</option>
-              <option value="FI">Finland</option>
-              <option value="FR">France</option>
-              <option value="DE">Germany</option>
-              <option value="GR">Greece</option>
-              <option value="HU">Hungary</option>
-              <option value="IE">Ireland</option>
-              <option value="IT">Italy</option>
-              <option value="LV">Latvia</option>
-              <option value="LT">Lithuania</option>
-              <option value="LU">Luxembourg</option>
-              <option value="MT">Malta</option>
-              <option value="NL">Netherlands</option>
-              <option value="PL">Poland</option>
-              <option value="PT">Portugal</option>
-              <option value="RO">Romania</option>
-              <option value="SK">Slovakia</option>
-              <option value="SI">Slovenia</option>
-              <option value="ES">Spain</option>
-              <option value="SE">Sweden</option>
-            </select>
-          </div>
+        <h2 class="section-title">Registered address</h2>
 
-          <div class="field">
-            <label>Enterprise / EU business number *</label>
+        <div class="field">
+          <label>Contact person *</label>
+          <input id="registered_contact_person" required />
+        </div>
 
-            <div class="prefix-input">
-              <span class="prefix-badge" id="vatPrefixBadge">—</span>
-              <input id="vat_number" required placeholder="Select country first">
-            </div>
+        <div class="field">
+          <label>Street + number *</label>
+          <input id="registered_street" required />
+        </div>
 
-            <div class="help-text help-text-normal" id="vatHelp">
-              Select a country to see the suggested format.
-            </div>
+        <div class="field">
+          <label>Box (optional)</label>
+          <input id="registered_box" />
+        </div>
 
-            <div class="soft-warning" id="vatWarn"></div>
-          </div>
+        <div class="field">
+          <label>Postal code *</label>
+          <input id="registered_postal_code" required />
+        </div>
 
-          <div class="field">
-            <label>Website (optional)</label>
-            <input id="website" type="url" placeholder="https://example.com">
-            <div class="help-text">Leave empty if not applicable.</div>
-          </div>
+        <div class="field">
+          <label>City *</label>
+          <input id="registered_city" required />
+        </div>
 
-          <h3 class="form-section-title">Registered address</h3>
+        <!-- BE-only; keep as hidden so backend never depends on user input -->
+        <input type="hidden" id="registered_country_code" value="BE" />
+
+        <hr class="divider" />
+
+        <h2 class="section-title">Billing</h2>
+
+        <div class="field">
+          <label>Invoices sent to (email) *</label>
+          <input id="billing_email" type="email" autocomplete="email" required />
+        </div>
+
+        <div class="field">
+          <label>Billing reference / PO (optional)</label>
+          <input id="billing_reference" />
+        </div>
+
+        <hr class="divider" />
+
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="delivery_is_different" />
+            Delivery address is different from registered address
+          </label>
+        </div>
+
+        <div id="deliveryBlock" style="display:none;">
+          <h2 class="section-title">Delivery address</h2>
 
           <div class="field">
             <label>Contact person *</label>
-            <input id="registered_contact_person" required autocomplete="name">
+            <input id="delivery_contact_person" />
           </div>
 
           <div class="field">
             <label>Street + number *</label>
-            <input id="registered_street" required autocomplete="street-address">
+            <input id="delivery_street" />
           </div>
 
           <div class="field">
             <label>Box (optional)</label>
-            <input id="registered_box">
-          </div>
-
-          <div class="field-row">
-            <div class="field">
-              <label>Postal code *</label>
-              <input id="registered_postal_code" required autocomplete="postal-code">
-            </div>
-            <div class="field">
-              <label>City *</label>
-              <input id="registered_city" required autocomplete="address-level2">
-            </div>
-          </div>
-
-          <!-- Backend supports registered_country_code, but we keep it aligned with country_code -->
-          <input type="hidden" id="registered_country_code" />
-
-          <h3 class="form-section-title">Billing</h3>
-
-          <div class="field">
-            <label>Billing e-mail *</label>
-            <input id="billing_email" type="email" required>
+            <input id="delivery_box" />
           </div>
 
           <div class="field">
-            <label>Billing reference / PO (optional)</label>
-            <input id="billing_reference">
+            <label>Postal code *</label>
+            <input id="delivery_postal_code" />
           </div>
 
-          <div class="checkbox-row">
-            <input type="checkbox" id="delivery_is_different">
-            <span>Delivery address for MyPunctoo plate is different from registered address</span>
+          <div class="field">
+            <label>City *</label>
+            <input id="delivery_city" />
           </div>
 
-          <div id="deliveryBlock" style="display:none;">
-            <h3 class="form-section-title">Delivery address</h3>
-
-            <div class="field">
-              <label>Contact person *</label>
-              <input id="delivery_contact_person">
-            </div>
-
-            <div class="field">
-              <label>Street + number *</label>
-              <input id="delivery_street">
-            </div>
-
-            <div class="field">
-              <label>Box (optional)</label>
-              <input id="delivery_box">
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Postal code *</label>
-                <input id="delivery_postal_code">
-              </div>
-              <div class="field">
-                <label>City *</label>
-                <input id="delivery_city">
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Country *</label>
-              <select id="delivery_country_code">
-                <option value="">Select country</option>
-                <option value="AT">Austria</option>
-                <option value="BE">Belgium</option>
-                <option value="BG">Bulgaria</option>
-                <option value="HR">Croatia</option>
-                <option value="CY">Cyprus</option>
-                <option value="CZ">Czechia</option>
-                <option value="DK">Denmark</option>
-                <option value="EE">Estonia</option>
-                <option value="FI">Finland</option>
-                <option value="FR">France</option>
-                <option value="DE">Germany</option>
-                <option value="GR">Greece</option>
-                <option value="HU">Hungary</option>
-                <option value="IE">Ireland</option>
-                <option value="IT">Italy</option>
-                <option value="LV">Latvia</option>
-                <option value="LT">Lithuania</option>
-                <option value="LU">Luxembourg</option>
-                <option value="MT">Malta</option>
-                <option value="NL">Netherlands</option>
-                <option value="PL">Poland</option>
-                <option value="PT">Portugal</option>
-                <option value="RO">Romania</option>
-                <option value="SK">Slovakia</option>
-                <option value="SI">Slovenia</option>
-                <option value="ES">Spain</option>
-                <option value="SE">Sweden</option>
-              </select>
-            </div>
-          </div>
+          <!-- BE-only hidden -->
+          <input type="hidden" id="delivery_country_code" value="BE" />
         </div>
 
-        <!-- STEP 3 -->
-        <div id="step-3" class="form-step">
-          <h3 class="form-section-title">Confirm your order</h3>
+        <div class="actions">
+          <button class="btn" id="btnStep2Back">← Back</button>
+          <button class="btn primary" id="btnStep2Next">Next →</button>
+        </div>
+      </section>
 
-          <div class="order-summary">
-            <div class="order-line">
-              <div class="order-label">One-time startup fee</div>
-              <div class="order-price" id="startupFee">€49</div>
-              <div class="order-note">Includes 1 PUNCTOO Plate, shipping & activation</div>
-            </div>
+      <!-- STEP 3 -->
+      <section class="step" id="step3" style="display:none;">
+        <h2 class="section-title">Confirm</h2>
+        <div class="confirm-box" id="confirmBox"></div>
 
-            <div class="order-line">
-              <div class="order-label">Monthly subscription</div>
-              <div class="order-price" id="monthlyFee">€9 / month</div>
-              <div class="order-note">Excl. VAT, starts upon activation</div>
-            </div>
-
-            <div class="order-line order-line-split">
-              <div class="order-label">Extra PUNCTOO Plates (optional)</div>
-
-              <div class="qty">
-                <button type="button" class="qty-btn" id="platesMinus" aria-label="Decrease">−</button>
-                <input id="extraPlates" class="qty-input" value="0" inputmode="numeric" autocomplete="off">
-                <button type="button" class="qty-btn" id="platesPlus" aria-label="Increase">+</button>
-              </div>
-
-              <div class="order-note">€39 / piece</div>
-
-              <div class="order-note">
-                You can also order one or more additional Plates later via your MyPunctoo dashboard.
-              </div>
-            </div>
-
-            <div class="order-total">
-              <div class="order-total-label">Total today (excl. VAT)</div>
-              <div class="order-total-price" id="totalToday">€49</div>
-            </div>
-          </div>
-
-          <div class="checkbox-row checkbox-row-strong">
-            <input type="checkbox" id="salesTerms" required>
-            <span>I have read and accept the sales terms & conditions</span>
-          </div>
+        <div class="actions">
+          <button class="btn" id="btnStep3Back">← Back</button>
+          <button class="btn primary" id="btnCreateAccount">Create account</button>
         </div>
 
-        <!-- NAV -->
-        <div class="form-navigation">
-          <div class="nav-left">
-            <div class="nav-hint" id="navHint">Step 1 of 3</div>
-          </div>
-
-          <div class="nav-right">
-            <button type="button" id="backBtn" class="btn-secondary" style="display:none;">← Back</button>
-            <button type="button" id="nextBtn" class="btn-primary">Next →</button>
-            <button type="button" id="confirmBtn" class="btn-primary" style="display:none;">Confirm order</button>
-          </div>
+        <div class="help-text help-text-normal" style="margin-top:10px;">
+          By creating an account, you confirm your company data is correct.
         </div>
-      </form>
+      </section>
+
     </div>
-
-    <div class="auth-aside" aria-hidden="true"></div>
   </div>
-</div>
 
 <script>
-(function () {
-  // Steps
-  const step1 = document.getElementById('step-1');
-  const step2 = document.getElementById('step-2');
-  const step3 = document.getElementById('step-3');
-
-  const nextBtn = document.getElementById('nextBtn');
-  const backBtn = document.getElementById('backBtn');
-  const confirmBtn = document.getElementById('confirmBtn');
-  const navHint = document.getElementById('navHint');
-
-  const pill1 = document.querySelector('.step-pill-1');
-  const pill2 = document.querySelector('.step-pill-2');
-  const pill3 = document.querySelector('.step-pill-3');
-
-  const formError = document.getElementById('formError');
-  const formStatus = document.getElementById('formStatus');
-
-  // Step 1 fields (backend expects: email, password)
-  const signupTokenEl = document.getElementById('signup_token');
-  const emailEl = document.getElementById('email');
-  const passwordEl = document.getElementById('password');
-  const passwordConfirmEl = document.getElementById('passwordConfirm');
-
-  // Step 2 fields (backend expects these exact snake_case keys)
-  const companyNameEl = document.getElementById('companyName');
-  const countryCodeEl = document.getElementById('country_code');
-  const vatNumberEl = document.getElementById('vat_number');
-  const websiteEl = document.getElementById('website');
-
-  const regContactEl = document.getElementById('registered_contact_person');
-  const regStreetEl = document.getElementById('registered_street');
-  const regBoxEl = document.getElementById('registered_box');
-  const regPostalEl = document.getElementById('registered_postal_code');
-  const regCityEl = document.getElementById('registered_city');
-  const regCountryHiddenEl = document.getElementById('registered_country_code');
-
-  const billingEmailEl = document.getElementById('billing_email');
-  const billingRefEl = document.getElementById('billing_reference');
-
-  const deliveryCheckbox = document.getElementById('delivery_is_different');
-  const deliveryBlock = document.getElementById('deliveryBlock');
-
-  const delContactEl = document.getElementById('delivery_contact_person');
-  const delStreetEl = document.getElementById('delivery_street');
-  const delBoxEl = document.getElementById('delivery_box');
-  const delPostalEl = document.getElementById('delivery_postal_code');
-  const delCityEl = document.getElementById('delivery_city');
-  const delCountryEl = document.getElementById('delivery_country_code');
-
-  // VAT UI helpers
-  const vatPrefixBadgeEl = document.getElementById('vatPrefixBadge');
-  const vatHelpEl = document.getElementById('vatHelp');
-  const vatWarnEl = document.getElementById('vatWarn');
-
-  // Step 3 UI
-  const platesMinus = document.getElementById('platesMinus');
-  const platesPlus = document.getElementById('platesPlus');
-  const extraPlatesEl = document.getElementById('extraPlates');
-  const salesTermsEl = document.getElementById('salesTerms');
-  const totalTodayEl = document.getElementById('totalToday');
-
-  const STARTUP_FEE = 49;
-  const EXTRA_PLATE_PRICE = 39;
+  // -----------------------------
+  // UI helpers
+  // -----------------------------
+  const $ = (id) => document.getElementById(id);
 
   function showError(msg) {
-    formError.textContent = msg || '';
-    formError.classList.toggle('visible', !!msg);
+    const el = $("errorLine");
+    el.textContent = msg || "";
+    el.style.display = msg ? "block" : "none";
   }
+
   function showStatus(msg) {
-    formStatus.textContent = msg || '';
-    formStatus.classList.toggle('visible', !!msg);
-  }
-
-  function setStepPills(step) {
-    pill1.classList.toggle('active', step === 1);
-    pill2.classList.toggle('active', step === 2);
-    pill3.classList.toggle('active', step === 3);
-  }
-
-  function go(step) {
-    step1.classList.toggle('active', step === 1);
-    step2.classList.toggle('active', step === 2);
-    step3.classList.toggle('active', step === 3);
-
-    setStepPills(step);
-
-    backBtn.style.display = step === 1 ? 'none' : 'inline-flex';
-    nextBtn.style.display = step === 3 ? 'none' : 'inline-flex';
-    confirmBtn.style.display = step === 3 ? 'inline-flex' : 'none';
-
-    navHint.textContent = step === 1 ? 'Step 1 of 3' : (step === 2 ? 'Step 2 of 3' : 'Step 3 of 3');
-
-    showError('');
-    showStatus('');
-
-    if (step === 3) updateTotal();
-  }
-
-  function toIntSafe(v, fallback = 0) {
-    const n = parseInt(String(v || '').replace(/[^\d]/g, ''), 10);
-    return Number.isFinite(n) ? n : fallback;
-  }
-  function clamp(n, min, max) {
-    return Math.max(min, Math.min(max, n));
-  }
-  function updateTotal() {
-    const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
-    extraPlatesEl.value = String(qty);
-    const total = STARTUP_FEE + (qty * EXTRA_PLATE_PRICE);
-    totalTodayEl.textContent = `€${total}`;
-  }
-
-  platesMinus.addEventListener('click', () => {
-    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) - 1, 0, 99));
-    updateTotal();
-  });
-  platesPlus.addEventListener('click', () => {
-    extraPlatesEl.value = String(clamp(toIntSafe(extraPlatesEl.value, 0) + 1, 0, 99));
-    updateTotal();
-  });
-  extraPlatesEl.addEventListener('input', updateTotal);
-  extraPlatesEl.addEventListener('blur', updateTotal);
-
-  // VAT helpers
-  function vatPrefixFor(countryCode) {
-    if (!countryCode) return '';
-    if (countryCode === 'GR') return 'EL';
-    return countryCode;
-  }
-
-  const FORMAT_BY_PREFIX = {
-    BE: { example: 'BE0XXXXXXXXX', soft: /^BE0\d{9}$/ },
-    NL: { example: 'NL123456789B01', soft: /^NL\d{9}B\d{2}$/ },
-    DE: { example: 'DE123456789', soft: /^DE\d{9}$/ },
-    FR: { example: 'FRXX123456789', soft: /^FR[A-Z0-9]{2}\d{9}$/ },
-    LU: { example: 'LU12345678', soft: /^LU\d{8}$/ },
-    IT: { example: 'IT12345678901', soft: /^IT\d{11}$/ },
-    ES: { example: 'ESX1234567X', soft: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/ },
-    PT: { example: 'PT123456789', soft: /^PT\d{9}$/ },
-    AT: { example: 'ATU12345678', soft: /^ATU\d{8}$/ },
-    IE: { example: 'IE1234567X', soft: /^IE[A-Z0-9]{8,9}$/ },
-    PL: { example: 'PL1234567890', soft: /^PL\d{10}$/ },
-    SE: { example: 'SE123456789012', soft: /^SE\d{12}$/ },
-    DK: { example: 'DK12345678', soft: /^DK\d{8}$/ },
-    FI: { example: 'FI12345678', soft: /^FI\d{8}$/ },
-    EL: { example: 'EL123456789', soft: /^EL\d{9}$/ },
-    CY: { example: 'CY12345678X', soft: /^CY\d{8}[A-Z]$/ }
-  };
-
-  function normalizeVatInput(raw) {
-    return (raw || '')
-      .trim()
-      .toUpperCase()
-      .replace(/[\s.\-\/]/g, '');
-  }
-
-  function setVatUI() {
-    const cc = (countryCodeEl.value || '').trim();
-    const prefix = vatPrefixFor(cc);
-
-    vatPrefixBadgeEl.textContent = prefix || '—';
-    regCountryHiddenEl.value = cc || '';
-
-    if (!cc) {
-      vatNumberEl.placeholder = 'Select country first';
-      vatHelpEl.textContent = 'Select a country to see the suggested format.';
-      vatWarnEl.textContent = '';
-      vatWarnEl.style.display = 'none';
-      return;
-    }
-
-    const fmt = FORMAT_BY_PREFIX[prefix];
-    const example = fmt?.example ? `Example: ${fmt.example}` : `Example: ${prefix}…`;
-    vatNumberEl.placeholder = example;
-
-    vatHelpEl.textContent =
-      (cc === 'BE')
-        ? 'Belgium: use your ondernemingsnummer (BE0xxxxxxxxx).'
-        : 'Other EU countries: use your VAT/business number as used on invoices.';
-
-    validateVatSoft();
-  }
-
-  function validateVatSoft() {
-    const cc = (countryCodeEl.value || '').trim();
-    const prefix = vatPrefixFor(cc);
-    const fmt = FORMAT_BY_PREFIX[prefix];
-
-    const norm = normalizeVatInput(vatNumberEl.value);
-    if (!norm) {
-      vatWarnEl.textContent = '';
-      vatWarnEl.style.display = 'none';
-      return;
-    }
-
-    const withPrefix = norm.startsWith(prefix) ? norm : (prefix + norm);
-    const looksOk = fmt?.soft ? fmt.soft.test(withPrefix) : true;
-
-    if (!looksOk) {
-      vatWarnEl.textContent =
-        'This number looks unusual for the selected country. Please double-check (we won’t block you).';
-      vatWarnEl.style.display = 'block';
-    } else {
-      vatWarnEl.textContent = '';
-      vatWarnEl.style.display = 'none';
-    }
-  }
-
-  countryCodeEl.addEventListener('change', () => {
-    setVatUI();
-    if (deliveryCheckbox.checked && !delCountryEl.value) {
-      delCountryEl.value = countryCodeEl.value || '';
-    }
-  });
-
-  vatNumberEl.addEventListener('input', validateVatSoft);
-  vatNumberEl.addEventListener('blur', validateVatSoft);
-
-  setVatUI();
-
-  deliveryCheckbox.addEventListener('change', () => {
-    const on = deliveryCheckbox.checked;
-    deliveryBlock.style.display = on ? 'block' : 'none';
-
-    deliveryBlock.querySelectorAll('input,select').forEach(el => {
-      on ? el.setAttribute('required', 'required') : el.removeAttribute('required');
-      if (!on) el.value = '';
-    });
-
-    if (on) {
-      delCountryEl.value = countryCodeEl.value || '';
-    }
-  });
-
-  // Uppercase most non-email fields (matches your previous behavior)
-  function shouldUppercase(el) {
-    if (!el) return false;
-    if (el.tagName === 'SELECT') return true;
-    if (el.tagName === 'TEXTAREA') return true;
-    if (el.tagName !== 'INPUT') return false;
-
-    const t = (el.type || 'text').toLowerCase();
-    if (t === 'email' || t === 'password' || t === 'url') return false;
-    return true;
-  }
-  document.addEventListener('input', (e) => {
-    const el = e.target;
-    if (!shouldUppercase(el)) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    el.value = (el.value || '').toUpperCase();
-    try { el.setSelectionRange(start, end); } catch (_) {}
-  });
-
-  // normalize emails
-  [emailEl, billingEmailEl].forEach(el => {
-    el.addEventListener('blur', () => {
-      el.value = (el.value || '').trim().toLowerCase();
-    });
-  });
-
-  // Restore token after refresh
-  const storedTok = sessionStorage.getItem('signup_token');
-  if (storedTok && !signupTokenEl.value) signupTokenEl.value = storedTok;
-
-  // Payload builders: EXACTLY what backend uses
-  function buildStep1Payload() {
-    return {
-      email: (emailEl.value || '').trim().toLowerCase(),
-      password: passwordEl.value || ''
-    };
-  }
-
-  function buildStep2Payload() {
-    const deliveryDifferent = !!deliveryCheckbox.checked;
-
-    // Normalize VAT number value in a predictable way
-    const cc = (countryCodeEl.value || '').trim();
-    const prefix = vatPrefixFor(cc);
-    const norm = normalizeVatInput(vatNumberEl.value);
-    const finalVat = norm && prefix ? (norm.startsWith(prefix) ? norm : (prefix + norm)) : norm;
-
-    const payload = {
-      signup_token: (signupTokenEl.value || '').trim(),
-
-      company_name: (companyNameEl.value || '').trim(),
-      country_code: cc || 'BE',
-      vat_number: (finalVat || '').trim(),
-      website: (websiteEl.value || '').trim() || null,
-
-      registered_contact_person: (regContactEl.value || '').trim(),
-      registered_street: (regStreetEl.value || '').trim(),
-      registered_box: (regBoxEl.value || '').trim() || null,
-      registered_postal_code: (regPostalEl.value || '').trim(),
-      registered_city: (regCityEl.value || '').trim(),
-      registered_country_code: cc || null,
-
-      billing_email: (billingEmailEl.value || '').trim().toLowerCase(),
-      billing_reference: (billingRefEl.value || '').trim() || null,
-
-      delivery_is_different: deliveryDifferent
-    };
-
-    if (deliveryDifferent) {
-      payload.delivery_contact_person = (delContactEl.value || '').trim();
-      payload.delivery_street = (delStreetEl.value || '').trim();
-      payload.delivery_box = (delBoxEl.value || '').trim() || null;
-      payload.delivery_postal_code = (delPostalEl.value || '').trim();
-      payload.delivery_city = (delCityEl.value || '').trim();
-      payload.delivery_country_code = (delCountryEl.value || '').trim();
-    }
-
-    return payload;
-  }
-
-  function buildStep3Payload() {
-    return {
-      signup_token: (signupTokenEl.value || '').trim()
-    };
-  }
-
-  function isValidEmail(s) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+    const el = $("statusLine");
+    el.textContent = msg || "";
+    el.style.display = msg ? "block" : "none";
   }
 
   function requireFilled(label, value) {
-    if (!String(value || '').trim()) {
-      showError(`${label} is required.`);
+    if (value === null || value === undefined) value = "";
+    const s = String(value).trim();
+    if (!s) {
+      showError(`Please fill in: ${label}`);
       return false;
     }
     return true;
   }
 
+  function isValidEmail(s) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
+  }
+
+  // Strict Belgium VAT format: "BE 0123. 456. 789"
+  function isValidBEVat(s) {
+    return /^BE\s0\d{3}\.\s\d{3}\.\s\d{3}$/.test(String(s || "").trim());
+  }
+
+  function escapeHtml(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function formatDateISO(d) {
+    // Accept ISO strings from server; show YYYY-MM-DD
+    if (!d) return "–";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  // -----------------------------
+  // Steps
+  // -----------------------------
   let currentStep = 1;
 
-  backBtn.onclick = () => {
-    if (currentStep === 2) { currentStep = 1; go(1); return; }
-    if (currentStep === 3) { currentStep = 2; go(2); return; }
-  };
-
-  nextBtn.onclick = async () => {
-    showError('');
-    showStatus('');
-
-    // STEP 1
-    if (currentStep === 1) {
-      const email = (emailEl.value || '').trim().toLowerCase();
-      const password = passwordEl.value || '';
-      const confirm = passwordConfirmEl.value || '';
-
-      if (!email || !password || !confirm) { showError('Please fill in all required fields.'); return; }
-      if (!isValidEmail(email)) { showError('Invalid email.'); return; }
-      if (password.length < 8) { showError('Password must be at least 8 characters.'); return; }
-      if (password !== confirm) { showError('Passwords do not match.'); return; }
-
-      const payload = buildStep1Payload();
-
-      showStatus('Creating your account...');
-      try {
-        const r = await fetch('/api/signup/step1', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok || !data.ok) {
-          showStatus('');
-          showError(data.error || 'Signup failed.');
-          return;
-        }
-
-        // server returns signup_token (snake_case). We support both just in case.
-        signupTokenEl.value = (data.signup_token || data.signupToken || '').trim();
-        if (!signupTokenEl.value) {
-          showStatus('');
-          showError('Signup token missing from server response.');
-          return;
-        }
-
-        sessionStorage.setItem('signup_token', signupTokenEl.value);
-
-        // convenience: billing email defaults to account email
-        billingEmailEl.value = email;
-
-        showStatus('');
-        currentStep = 2;
-        go(2);
-      } catch (e) {
-        showStatus('');
-        showError('Network error.');
-      }
-      return;
+  function setStepper(step) {
+    for (let i = 1; i <= 3; i++) {
+      const dot = $("stepDot" + i);
+      if (!dot) continue;
+      dot.classList.toggle("active", i === step);
+      dot.classList.toggle("done", i < step);
     }
+  }
 
-    // STEP 2
-    if (currentStep === 2) {
-      // Lightweight frontend checks aligned with backend required fields
-      const payload = buildStep2Payload();
+  function go(step) {
+    currentStep = step;
+    showError("");
+    showStatus("");
+    $("step1").style.display = step === 1 ? "block" : "none";
+    $("step2").style.display = step === 2 ? "block" : "none";
+    $("step3").style.display = step === 3 ? "block" : "none";
+    setStepper(step);
+  }
 
-      if (!requireFilled('Company name', payload.company_name)) return;
-      if (!requireFilled('Country', payload.country_code)) return;
-      if (!requireFilled('Enterprise / EU business number', payload.vat_number)) return;
+  // Delivery toggle
+  $("delivery_is_different").addEventListener("change", () => {
+    $("deliveryBlock").style.display = $("delivery_is_different").checked ? "block" : "none";
+  });
 
-      if (!requireFilled('Registered contact person', payload.registered_contact_person)) return;
-      if (!requireFilled('Registered street + number', payload.registered_street)) return;
-      if (!requireFilled('Registered postal code', payload.registered_postal_code)) return;
-      if (!requireFilled('Registered city', payload.registered_city)) return;
+  // -----------------------------
+  // Step 1 -> create draft
+  // -----------------------------
+  $("btnStep1Next").addEventListener("click", async () => {
+    showError("");
+    showStatus("");
 
-      if (!payload.billing_email || !isValidEmail(payload.billing_email)) {
-        showError('Valid billing email is required.');
-        return;
-      }
+    const email = $("email").value.trim().toLowerCase();
+    const password = $("password").value;
 
-      if (payload.delivery_is_different) {
-        if (!requireFilled('Delivery contact person', payload.delivery_contact_person)) return;
-        if (!requireFilled('Delivery street + number', payload.delivery_street)) return;
-        if (!requireFilled('Delivery postal code', payload.delivery_postal_code)) return;
-        if (!requireFilled('Delivery city', payload.delivery_city)) return;
-        if (!requireFilled('Delivery country', payload.delivery_country_code)) return;
-      }
+    if (!requireFilled("Email", email)) return;
+    if (!isValidEmail(email)) { showError("Invalid email."); return; }
+    if (!requireFilled("Password", password)) return;
+    if (String(password).length < 8) { showError("Password must be at least 8 characters."); return; }
 
-      showStatus('Saving your company details...');
-      try {
-        const r = await fetch('/api/signup/step2', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+    showStatus("Creating your signup draft...");
 
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok || !data.ok) {
-          showStatus('');
-          showError(data.error || 'Could not save company details.');
-          return;
-        }
-
-        showStatus('');
-        currentStep = 3;
-        go(3);
-      } catch (e) {
-        showStatus('');
-        showError('Network error.');
-      }
-    }
-  };
-
-  confirmBtn.onclick = async () => {
-    showError('');
-    showStatus('');
-
-    const qty = clamp(toIntSafe(extraPlatesEl.value, 0), 0, 99);
-    extraPlatesEl.value = String(qty);
-    updateTotal();
-
-    if (!salesTermsEl.checked) {
-      showError('Please accept the sales terms & conditions to continue.');
-      return;
-    }
-
-    // Backend only requires signup_token for step3
-    const payload = buildStep3Payload();
-
-    showStatus('Confirming your order...');
     try {
-      const r = await fetch('/api/signup/step3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      const r = await fetch("/api/signup/step1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
       });
-
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.ok) {
-        showStatus('');
-        showError(data.error || 'Order confirmation failed.');
+        showStatus("");
+        showError(data.error || "Could not start signup.");
+        return;
+      }
+      $("signup_token").value = data.signup_token;
+      showStatus("");
+      go(2);
+    } catch (e) {
+      showStatus("");
+      showError("Network error.");
+    }
+  });
+
+  // -----------------------------
+  // Step 2 payload
+  // -----------------------------
+  function buildStep2Payload() {
+    const deliveryDifferent = $("delivery_is_different").checked;
+
+    const payload = {
+      signup_token: $("signup_token").value.trim(),
+
+      company_name: $("company_name").value.trim(),
+
+      // BE-only
+      country_code: "BE",
+
+      vat_number: $("vat_number").value.trim(),
+      website: $("website").value.trim() || null,
+
+      registered_contact_person: $("registered_contact_person").value.trim(),
+      registered_street: $("registered_street").value.trim(),
+      registered_box: $("registered_box").value.trim() || null,
+      registered_postal_code: $("registered_postal_code").value.trim(),
+      registered_city: $("registered_city").value.trim(),
+      registered_country_code: "BE",
+
+      billing_email: $("billing_email").value.trim().toLowerCase(),
+      billing_reference: $("billing_reference").value.trim() || null,
+
+      delivery_is_different: deliveryDifferent
+    };
+
+    if (deliveryDifferent) {
+      payload.delivery_contact_person = $("delivery_contact_person").value.trim();
+      payload.delivery_street = $("delivery_street").value.trim();
+      payload.delivery_box = $("delivery_box").value.trim() || null;
+      payload.delivery_postal_code = $("delivery_postal_code").value.trim();
+      payload.delivery_city = $("delivery_city").value.trim();
+      payload.delivery_country_code = "BE";
+    }
+
+    return payload;
+  }
+
+  function fillConfirmBox(payload) {
+    const lines = [];
+    lines.push(`<div><strong>Company:</strong> ${escapeHtml(payload.company_name)}</div>`);
+    lines.push(`<div><strong>VAT:</strong> ${escapeHtml(payload.vat_number)}</div>`);
+    lines.push(`<div><strong>Registered contact:</strong> ${escapeHtml(payload.registered_contact_person)}</div>`);
+    lines.push(`<div><strong>Registered address:</strong> ${escapeHtml(payload.registered_street)} ${escapeHtml(payload.registered_box || "")}, ${escapeHtml(payload.registered_postal_code)} ${escapeHtml(payload.registered_city)}</div>`);
+    lines.push(`<div><strong>Billing email:</strong> ${escapeHtml(payload.billing_email)}</div>`);
+    if (payload.billing_reference) lines.push(`<div><strong>Billing reference:</strong> ${escapeHtml(payload.billing_reference)}</div>`);
+    if (payload.website) lines.push(`<div><strong>Website:</strong> ${escapeHtml(payload.website)}</div>`);
+
+    if (payload.delivery_is_different) {
+      lines.push(`<hr />`);
+      lines.push(`<div><strong>Delivery contact:</strong> ${escapeHtml(payload.delivery_contact_person)}</div>`);
+      lines.push(`<div><strong>Delivery address:</strong> ${escapeHtml(payload.delivery_street)} ${escapeHtml(payload.delivery_box || "")}, ${escapeHtml(payload.delivery_postal_code)} ${escapeHtml(payload.delivery_city)}</div>`);
+    }
+
+    $("confirmBox").innerHTML = lines.join("");
+  }
+
+  // -----------------------------
+  // Step 2 -> save company details
+  // -----------------------------
+  $("btnStep2Next").addEventListener("click", async () => {
+    showError("");
+    showStatus("");
+
+    const payload = buildStep2Payload();
+
+    if (!requireFilled("Signup token", payload.signup_token)) return;
+
+    if (!requireFilled("Company name", payload.company_name)) return;
+
+    if (!requireFilled("Enterprise / VAT number", payload.vat_number)) return;
+    if (!isValidBEVat(payload.vat_number)) {
+      showError("VAT format required: BE 0123. 456. 789");
+      return;
+    }
+
+    if (!requireFilled("Registered contact person", payload.registered_contact_person)) return;
+    if (!requireFilled("Registered street + number", payload.registered_street)) return;
+    if (!requireFilled("Registered postal code", payload.registered_postal_code)) return;
+    if (!requireFilled("Registered city", payload.registered_city)) return;
+
+    if (!requireFilled("Billing email", payload.billing_email)) return;
+    if (!isValidEmail(payload.billing_email)) { showError("Valid billing email is required."); return; }
+
+    if (payload.delivery_is_different) {
+      if (!requireFilled("Delivery contact person", payload.delivery_contact_person)) return;
+      if (!requireFilled("Delivery street + number", payload.delivery_street)) return;
+      if (!requireFilled("Delivery postal code", payload.delivery_postal_code)) return;
+      if (!requireFilled("Delivery city", payload.delivery_city)) return;
+    }
+
+    showStatus("Saving your company details...");
+
+    try {
+      const r = await fetch("/api/signup/step2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json().catch(() => ({}));
+
+      if (!r.ok || !data.ok) {
+        showStatus("");
+        showError(data.error || "Could not save company details.");
         return;
       }
 
-      sessionStorage.removeItem('signup_token');
-      window.location.href = data.redirectUrl || '/login';
+      showStatus("");
+      fillConfirmBox(payload);
+      go(3);
     } catch (e) {
-      showStatus('');
-      showError('Network error.');
+      showStatus("");
+      showError("Network error.");
     }
-  };
+  });
 
+  $("btnStep2Back").addEventListener("click", () => go(1));
+
+  // -----------------------------
+  // Step 3 -> finalize (create company + user)
+  // -----------------------------
+  $("btnCreateAccount").addEventListener("click", async () => {
+    showError("");
+    showStatus("");
+
+    const signup_token = $("signup_token").value.trim();
+    if (!requireFilled("Signup token", signup_token)) return;
+
+    showStatus("Creating your account...");
+
+    try {
+      const r = await fetch("/api/signup/step3", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signup_token })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        showStatus("");
+        showError(data.error || "Could not create account.");
+        return;
+      }
+
+      showStatus("Account created. Redirecting to login...");
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 600);
+    } catch (e) {
+      showStatus("");
+      showError("Network error.");
+    }
+  });
+
+  $("btnStep3Back").addEventListener("click", () => go(2));
+
+  // Start
   go(1);
-  updateTotal();
-})();
 </script>
+
 </body>
 </html>

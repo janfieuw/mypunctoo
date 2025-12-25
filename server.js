@@ -1,5 +1,3 @@
-// server.js (hardened)
-
 'use strict';
 
 const express = require('express');
@@ -7,17 +5,19 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+
+// Keep your existing pool module path
 const { pool } = require('./db/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const rootDir = __dirname;
+const IS_PROD = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
 // =========================================================
 // Middleware
 // =========================================================
 app.use(express.json());
-
 app.use(express.static(path.join(rootDir, 'public')));
 
 // =========================================================
@@ -37,24 +37,8 @@ function genToken(bytes = 24) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
-function normalizeVatNumber(country, vatNumberRaw) {
-  const cc = String(country || '').trim().toUpperCase();
-  const raw = String(vatNumberRaw || '').trim().toUpperCase();
-
-  const digits = raw.replace(/[^0-9]/g, '');
-  if (!digits) return null;
-
-  if (cc === 'BE') {
-    const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
-    return `BE${last10}`;
-  }
-
-  return raw;
-}
-
 function buildAddressLineFromFields(street, box, postal, city, countryCode) {
   const parts = [];
-
   const st = safeText(street);
   const bx = safeText(box);
   const pc = safeText(postal);
@@ -83,14 +67,106 @@ function makeCompanyCode(companyName) {
   return `${base || 'COMP'}-${suffix}`;
 }
 
-function ensureDbOr500(res) {
-  if (!pool) {
-    res.status(500).json({ ok: false, error: 'Database not configured (DATABASE_URL missing).' });
-    return false;
+function errorResponse(res, e, fallbackMsg = 'Server error.') {
+  console.error(e);
+  if (!IS_PROD) {
+    return res.status(500).json({
+      ok: false,
+      error: fallbackMsg,
+      detail: String(e?.message || e),
+      code: e?.code || null
+    });
   }
-  return true;
+  return res.status(500).json({ ok: false, error: fallbackMsg });
 }
 
+// =========================================================
+// ✅ Startup schema guards
+// =========================================================
+async function ensureSchema() {
+  if (!pool) {
+    console.error('No DB pool (DATABASE_URL missing).');
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Monotone customer number: sequence + default + unique index
+    await client.query(`CREATE SEQUENCE IF NOT EXISTS customer_number_seq START 1;`);
+
+    await client.query(`
+      ALTER TABLE IF EXISTS companies
+      ALTER COLUMN created_at SET DEFAULT now();
+    `);
+
+    await client.query(`
+      ALTER TABLE IF EXISTS companies
+      ALTER COLUMN customer_number SET DEFAULT nextval('customer_number_seq');
+    `);
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS companies_customer_number_ux
+      ON companies(customer_number);
+    `);
+
+    // signup_drafts needs these columns for step2 & step3 updates
+    await client.query(`
+      ALTER TABLE IF EXISTS signup_drafts
+        ADD COLUMN IF NOT EXISTS email text,
+        ADD COLUMN IF NOT EXISTS password_hash text,
+        ADD COLUMN IF NOT EXISTS company_name text,
+        ADD COLUMN IF NOT EXISTS country_code text,
+        ADD COLUMN IF NOT EXISTS vat_number text,
+        ADD COLUMN IF NOT EXISTS website text,
+
+        ADD COLUMN IF NOT EXISTS registered_contact_person text,
+        ADD COLUMN IF NOT EXISTS registered_street text,
+        ADD COLUMN IF NOT EXISTS registered_box text,
+        ADD COLUMN IF NOT EXISTS registered_postal_code text,
+        ADD COLUMN IF NOT EXISTS registered_city text,
+        ADD COLUMN IF NOT EXISTS registered_country_code text,
+        ADD COLUMN IF NOT EXISTS registered_address text,
+
+        ADD COLUMN IF NOT EXISTS billing_email text,
+        ADD COLUMN IF NOT EXISTS billing_reference text,
+        ADD COLUMN IF NOT EXISTS billing_address text,
+
+        ADD COLUMN IF NOT EXISTS delivery_is_different boolean DEFAULT false,
+        ADD COLUMN IF NOT EXISTS delivery_contact_person text,
+        ADD COLUMN IF NOT EXISTS delivery_street text,
+        ADD COLUMN IF NOT EXISTS delivery_box text,
+        ADD COLUMN IF NOT EXISTS delivery_postal_code text,
+        ADD COLUMN IF NOT EXISTS delivery_city text,
+        ADD COLUMN IF NOT EXISTS delivery_country_code text,
+
+        ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+    `);
+
+    await client.query('COMMIT');
+    console.log('✅ Schema ensured.');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('❌ Schema ensure failed:', e);
+  } finally {
+    client.release();
+  }
+}
+
+ensureSchema().catch((e) => console.error(e));
+
+// =========================================================
+// Pages
+// =========================================================
+app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
+app.get('/signup', (req, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
+
+// =========================================================
+// Auth helpers
+// =========================================================
 async function getAuthUser(req) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) return null;
@@ -108,47 +184,28 @@ async function getAuthUser(req) {
 
   if (!rows.length) return null;
   if (!rows[0].is_active) return null;
-
   return rows[0];
 }
 
 function requireAuth(role = null) {
   return async (req, res, next) => {
     try {
-      if (!ensureDbOr500(res)) return;
-
       const user = await getAuthUser(req);
       if (!user) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
-      if (role && user.role !== role) {
-        return res.status(403).json({ ok: false, error: 'Forbidden' });
-      }
-
+      if (role && user.role !== role) return res.status(403).json({ ok: false, error: 'Forbidden' });
       req.user = user;
       next();
     } catch (e) {
-      console.error(e);
-      return res.status(500).json({ ok: false, error: 'Server error.' });
+      return errorResponse(res, e);
     }
   };
 }
 
 // =========================================================
-// Pages
-// =========================================================
-app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(rootDir, 'public', 'login.html')));
-app.get('/signup', (req, res) => res.sendFile(path.join(rootDir, 'public', 'signup.html')));
-app.get('/punch', (req, res) => res.sendFile(path.join(rootDir, 'public', 'punch.html')));
-app.get('/app', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
-
-// =========================================================
-// Auth endpoints
+// Login / Logout
 // =========================================================
 app.post('/api/login', async (req, res) => {
   try {
-    if (!ensureDbOr500(res)) return;
-
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
@@ -164,7 +221,6 @@ app.post('/api/login', async (req, res) => {
     );
 
     if (!rows.length) return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
-
     const user = rows[0];
     if (!user.is_active) return res.status(401).json({ ok: false, error: 'Account inactive.' });
 
@@ -173,7 +229,6 @@ app.post('/api/login', async (req, res) => {
 
     const token = genToken(24);
 
-    // We keep updated_at for client_portal_users (separate from companies.updated_at which you removed)
     await pool.query(
       `UPDATE client_portal_users
        SET auth_token = $1, updated_at = NOW()
@@ -183,43 +238,27 @@ app.post('/api/login', async (req, res) => {
 
     return res.json({ ok: true, token });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    return errorResponse(res, e);
   }
 });
 
 app.post('/api/logout', requireAuth(), async (req, res) => {
   try {
-    await pool.query(`UPDATE client_portal_users SET auth_token = NULL, updated_at = NOW() WHERE id = $1`, [
-      req.user.id
-    ]);
+    await pool.query(
+      `UPDATE client_portal_users SET auth_token = NULL, updated_at = NOW() WHERE id = $1`,
+      [req.user.id]
+    );
     return res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    return errorResponse(res, e);
   }
 });
 
-app.get('/api/me', requireAuth(), async (req, res) => {
-  return res.json({
-    ok: true,
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      role: req.user.role,
-      company_id: req.user.company_id
-    }
-  });
-});
-
 // =========================================================
-// Signup flow (3 steps)
+// Signup flow
 // =========================================================
-
 app.post('/api/signup/step1', async (req, res) => {
   try {
-    if (!ensureDbOr500(res)) return;
-
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
 
@@ -227,7 +266,6 @@ app.post('/api/signup/step1', async (req, res) => {
     if (!isEmail(email)) return res.status(400).json({ ok: false, error: 'Invalid email.' });
     if (password.length < 8) return res.status(400).json({ ok: false, error: 'Password must be at least 8 characters.' });
 
-    // block if already exists
     const exists = await pool.query(
       `SELECT 1 FROM client_portal_users WHERE lower(email) = lower($1) LIMIT 1`,
       [email]
@@ -237,7 +275,6 @@ app.post('/api/signup/step1', async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
     const signup_token = uuidv4();
 
-    // OK to store draft timestamps; this is not your "account created" truth
     await pool.query(
       `INSERT INTO signup_drafts (signup_token, email, password_hash, created_at, updated_at)
        VALUES ($1,$2,$3,NOW(),NOW())`,
@@ -246,28 +283,36 @@ app.post('/api/signup/step1', async (req, res) => {
 
     return res.json({ ok: true, signup_token });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    return errorResponse(res, e);
   }
 });
 
 app.post('/api/signup/step2', async (req, res) => {
   try {
-    if (!ensureDbOr500(res)) return;
-
     const signup_token = String(req.body.signup_token || '').trim();
     if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
 
-    const { rows } = await pool.query(`SELECT signup_token FROM signup_drafts WHERE signup_token = $1 LIMIT 1`, [
-      signup_token
-    ]);
-    if (!rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
+    const chk = await pool.query(
+      `SELECT signup_token FROM signup_drafts WHERE signup_token = $1 LIMIT 1`,
+      [signup_token]
+    );
+    if (!chk.rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
 
     const payload = req.body || {};
 
     const company_name = safeText(payload.company_name);
-    const country_code = safeText(payload.country_code) || 'BE';
-    const vat_number = normalizeVatNumber(country_code, payload.vat_number);
+
+    // Belgium-only: strict VAT format
+    const country_code = 'BE';
+    const vat_number_raw = safeText(payload.vat_number);
+    if (!vat_number_raw) return res.status(400).json({ ok: false, error: 'Enterprise number is required.' });
+
+    const beVatPattern = /^BE\s0\d{3}\.\s\d{3}\.\s\d{3}$/;
+    if (!beVatPattern.test(vat_number_raw)) {
+      return res.status(400).json({ ok: false, error: 'VAT format required: BE 0123. 456. 789' });
+    }
+    const vat_number = vat_number_raw;
+
     const website = safeText(payload.website);
 
     const registered_contact_person = safeText(payload.registered_contact_person);
@@ -275,7 +320,7 @@ app.post('/api/signup/step2', async (req, res) => {
     const registered_box = safeText(payload.registered_box);
     const registered_postal_code = safeText(payload.registered_postal_code);
     const registered_city = safeText(payload.registered_city);
-    const registered_country_code = safeText(payload.registered_country_code) || country_code;
+    const registered_country_code = 'BE';
 
     const billing_email = safeText(payload.billing_email);
     const billing_reference = safeText(payload.billing_reference);
@@ -287,10 +332,9 @@ app.post('/api/signup/step2', async (req, res) => {
     const delivery_box = deliveryDifferent ? safeText(payload.delivery_box) : null;
     const delivery_postal_code = deliveryDifferent ? safeText(payload.delivery_postal_code) : null;
     const delivery_city = deliveryDifferent ? safeText(payload.delivery_city) : null;
-    const delivery_country_code = deliveryDifferent ? safeText(payload.delivery_country_code) : null;
+    const delivery_country_code = deliveryDifferent ? 'BE' : null;
 
     if (!company_name) return res.status(400).json({ ok: false, error: 'Company name is required.' });
-    if (!vat_number) return res.status(400).json({ ok: false, error: 'Enterprise/EU business number is required.' });
     if (!registered_contact_person) return res.status(400).json({ ok: false, error: 'Registered contact person is required.' });
     if (!registered_street) return res.status(400).json({ ok: false, error: 'Registered street + number is required.' });
     if (!registered_postal_code) return res.status(400).json({ ok: false, error: 'Registered postal code is required.' });
@@ -305,13 +349,12 @@ app.post('/api/signup/step2', async (req, res) => {
       registered_country_code
     );
 
-    // Billing address = delivery address if different, else registered
     const billing_address = buildAddressLineFromFields(
       deliveryDifferent ? (delivery_street || registered_street) : registered_street,
       deliveryDifferent ? (delivery_box || registered_box) : registered_box,
       deliveryDifferent ? (delivery_postal_code || registered_postal_code) : registered_postal_code,
       deliveryDifferent ? (delivery_city || registered_city) : registered_city,
-      deliveryDifferent ? (delivery_country_code || registered_country_code) : registered_country_code
+      'BE'
     );
 
     await pool.query(
@@ -375,25 +418,24 @@ app.post('/api/signup/step2', async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    return errorResponse(res, e, 'Could not save company details.');
   }
 });
 
 app.post('/api/signup/step3', async (req, res) => {
-  if (!ensureDbOr500(res)) return;
-
   const client = await pool.connect();
   try {
     const signup_token = String(req.body.signup_token || '').trim();
     if (!signup_token) return res.status(400).json({ ok: false, error: 'Missing signup token.' });
 
-    const { rows } = await client.query(`SELECT * FROM signup_drafts WHERE signup_token = $1 LIMIT 1`, [signup_token]);
+    const { rows } = await client.query(
+      `SELECT * FROM signup_drafts WHERE signup_token = $1 LIMIT 1`,
+      [signup_token]
+    );
     if (!rows.length) return res.status(400).json({ ok: false, error: 'Invalid signup token.' });
 
     const draft = rows[0];
 
-    // Validate step2 completed
     if (!draft.company_name || !draft.vat_number || !draft.registered_contact_person || !draft.billing_email) {
       return res.status(400).json({ ok: false, error: 'Signup draft incomplete. Please complete step 2.' });
     }
@@ -408,21 +450,20 @@ app.post('/api/signup/step3', async (req, res) => {
     const regBox = draft.registered_box;
     const regPostal = draft.registered_postal_code;
     const regCity = draft.registered_city;
-    const regCountry = draft.registered_country_code;
+    const regCountry = draft.registered_country_code || 'BE';
 
     const delContact = draft.delivery_contact_person;
     const delStreet = draft.delivery_street;
     const delBox = draft.delivery_box;
     const delPostal = draft.delivery_postal_code;
     const delCity = draft.delivery_city;
-    const delCountry = draft.delivery_country_code;
+    const delCountry = draft.delivery_country_code || 'BE';
 
     const deliveryDifferent = !!draft.delivery_is_different;
 
     const billingEmail = draft.billing_email;
     const billingReference = draft.billing_reference;
 
-    // Billing address = delivery address if different, else registered
     const billingStreet = deliveryDifferent ? (delStreet || regStreet) : regStreet;
     const billingBox = deliveryDifferent ? (delBox || regBox) : regBox;
     const billingPostal = deliveryDifferent ? (delPostal || regPostal) : regPostal;
@@ -434,11 +475,10 @@ app.post('/api/signup/step3', async (req, res) => {
 
     await client.query('BEGIN');
 
-    // 1) Create company
-    // IMPORTANT:
-    // - DO NOT insert created_at: DB default is source of truth
-    // - DO NOT insert customer_number: DB default nextval(...) is source of truth
-    // - companies.updated_at is removed in your DB, so we NEVER reference it
+    // ✅ DB is source of truth:
+    // - companies.created_at is DEFAULT now()
+    // - companies.customer_number is DEFAULT nextval(...)
+    // - no companies.updated_at
     const companyCode = makeCompanyCode(companyName);
 
     const companyIns = await client.query(
@@ -463,18 +503,12 @@ app.post('/api/signup/step3', async (req, res) => {
          billing_box,
          billing_postal_code,
          billing_city,
-         billing_country_code,
-         delivery_street,
-         delivery_box,
-         delivery_postal_code,
-         delivery_city,
-         delivery_country_code
+         billing_country_code
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,
          $9,$10,$11,
          $12,$13,$14,$15,$16,
-         $17,$18,$19,$20,$21,
-         $22,$23,$24,$25,$26
+         $17,$18,$19,$20,$21
        )
        RETURNING id, created_at, customer_number`,
       [
@@ -489,62 +523,53 @@ app.post('/api/signup/step3', async (req, res) => {
         regContact || null,
         (deliveryDifferent ? delContact : null) || null,
         website || null,
+
         regStreet || null,
         regBox || null,
         regPostal || null,
         regCity || null,
-        regCountry || null,
+        regCountry || 'BE',
+
         billingStreet || null,
         billingBox || null,
         billingPostal || null,
         billingCity || null,
-        billingCountry || null,
-        deliveryDifferent ? (delStreet || null) : null,
-        deliveryDifferent ? (delBox || null) : null,
-        deliveryDifferent ? (delPostal || null) : null,
-        deliveryDifferent ? (delCity || null) : null,
-        deliveryDifferent ? (delCountry || null) : null
+        billingCountry || 'BE'
       ]
     );
 
-    const companyRow = companyIns.rows[0];
-    const companyId = companyRow.id;
+    const companyId = companyIns.rows[0].id;
 
-    // 2) Create admin user
-    // (client_portal_users can keep its own updated_at)
+    // Create admin portal user
     await client.query(
       `INSERT INTO client_portal_users (email, password_hash, role, is_active, company_id, created_at, updated_at)
        VALUES ($1,$2,'admin',true,$3,NOW(),NOW())`,
       [draft.email, draft.password_hash, companyId]
     );
 
-    // 3) Cleanup draft
+    // Cleanup draft
     await client.query(`DELETE FROM signup_drafts WHERE signup_token = $1`, [signup_token]);
 
     await client.query('COMMIT');
 
-    // Return values (handig voor debug; frontend mag dit negeren)
     return res.json({
       ok: true,
       company: {
-        id: companyRow.id,
-        created_at: companyRow.created_at,
-        customer_number: companyRow.customer_number
+        id: companyIns.rows[0].id,
+        created_at: companyIns.rows[0].created_at,
+        customer_number: companyIns.rows[0].customer_number
       }
     });
   } catch (e) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    try { await client.query('ROLLBACK'); } catch {}
+    return errorResponse(res, e, 'Could not create account.');
   } finally {
     client.release();
   }
 });
 
 // =========================================================
-// Company API
+// Company API (client record needs created_at + customer_number)
 // =========================================================
 app.get('/api/company', requireAuth(), async (req, res) => {
   try {
@@ -555,47 +580,22 @@ app.get('/api/company', requireAuth(), async (req, res) => {
 
     const c = rows[0];
 
-    const buildAddress = (street, box, pc, city, cc) =>
-      [safeText(street), safeText(box), [safeText(pc), safeText(city)].filter(Boolean).join(' ').trim(), safeText(cc)]
-        .filter(Boolean)
-        .join(', ');
-
-    const registeredAddress =
-      safeText(c.registered_address) ||
-      buildAddress(c.registered_street, c.registered_box, c.registered_postal_code, c.registered_city, c.registered_country_code) ||
-      null;
-
-    const rawDeliveryAddress =
-      buildAddress(c.delivery_street, c.delivery_box, c.delivery_postal_code, c.delivery_city, c.delivery_country_code) ||
-      null;
-
-    const deliveryAddress = rawDeliveryAddress || registeredAddress || null;
-
-    const company = {
-      ...c,
-      company_name: c.name,
-      main_contact: c.registered_contact_person || null,
-      invoices_sent_to: c.billing_email || null,
-      delivery_contact: c.delivery_contact_person || null,
-
-      registered_address: registeredAddress,
-      delivery_address: deliveryAddress,
-
-      // explicitly keep these stable for frontend
-      customer_number: c.customer_number ?? null,
-      created_at: c.created_at ?? null,
-      billing_reference: c.billing_reference || null
-    };
-
-    return res.json({ ok: true, company });
+    return res.json({
+      ok: true,
+      company: {
+        ...c,
+        company_name: c.name,
+        created_at: c.created_at,
+        customer_number: c.customer_number ?? null
+      }
+    });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: 'Server error.' });
+    return errorResponse(res, e);
   }
 });
 
 // =========================================================
-// Start server
+// Start
 // =========================================================
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
